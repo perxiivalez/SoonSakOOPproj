@@ -743,5 +743,5 @@ def _get_order(order_id: str):
 
 if __name__ == "__main__":
     print("🚀 SoonSak MCP Server กำลังเริ่มต้น...")
-    print(f"   Tools ที่พร้อมใช้งาน: {len(mcp._tool_manager._tools)} tools")
+    print(f"   Tools ที่พร้อมใช้งาน: พร้อมใช้งานแล้ว")
     mcp.run()
