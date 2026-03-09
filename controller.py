@@ -261,8 +261,35 @@ class SoonSak:
     # Order & Payment Flow
     # ─────────────────────────────────────────────
 
-    def create_order(self, booking: Booking) -> Order:
-        """สร้าง Order จาก Booking"""
+    def create_order(self, booking: Booking,
+                     apply_vip_discount: bool = True,
+                     coupon_code: str = None) -> Order:
+        """
+        สร้าง Order จาก Booking
+        - apply_vip_discount: ถ้า True และ User เป็น VIP จะหักส่วนลดจากราคาจริงเลย
+        - coupon_code: ถ้าระบุ จะใช้คูปองหักราคาด้วย
+        ราคาที่หักแล้วจะถูก set กลับเข้า Booking ก่อนสร้าง Order
+        """
+        user = self.find_user(booking.user_id)
+        final_price = booking.base_price
+
+        # ── Apply VIP Discount ──
+        if apply_vip_discount and user is not None and isinstance(user, VIPMember):
+            discount = user.calculate_discount(final_price)
+            final_price -= discount
+            print(f"[SoonSak] หักส่วนลด VIP {user.rank}: ราคาจาก {booking.base_price:.2f} → {final_price:.2f} บาท")
+
+        # ── Apply Coupon ──
+        if coupon_code and user is not None:
+            try:
+                final_price = user.use_coupon(coupon_code, final_price)
+                print(f"[SoonSak] หักคูปอง {coupon_code}: ราคาสุดท้าย {final_price:.2f} บาท")
+            except ValueError as e:
+                print(f"[SoonSak] ⚠️ ใช้คูปองไม่ได้: {e}")
+
+        # อัปเดตราคาใน Booking ให้ตรงกับราคาที่หักแล้ว
+        booking.set_price(final_price)
+
         order_id = self._new_order_id()
         order = Order(order_id=order_id)
         order.add_booking(booking)
@@ -277,10 +304,12 @@ class SoonSak:
         """
         ดำเนินการชำระเงิน
         - ถ้า pay_full=False → ชำระมัดจำก่อน
-        - ถ้า pay_full=True  → ชำระเต็มจำนวน
+        - ถ้า pay_full=True  → ชำระส่วนที่เหลือ + สะสมยอดเงินให้ User
 
-        ตัวอย่างการคำนวณ (A4):
-        ราคา 3,000 บาท + PercentDeposit 30% = มัดจำ 900 บาท
+        หลัง pay_full:
+        - เพิ่มยอด _total_spent ให้ User
+        - ถ้า User ทั่วไปยอดสะสมถึง 5,000 → เลื่อนเป็น VIPMember SILVER
+        - ถ้าเป็น VIPMember อยู่แล้ว → เช็ค rank upgrade อัตโนมัติ
         """
         self._require_login(user_id)
 
@@ -297,11 +326,52 @@ class SoonSak:
         if pay_full:
             txn = payment.pay_full(user_id, self._txn_counter + 1)
             self._txn_counter += 1
+
+            # ── สะสมยอดเงิน + เช็ค VIP upgrade ──
+            total_paid = order.calculate_total()
+            user = self.find_user(user_id)
+            if user is not None:
+                user.add_spent(total_paid)
+                self._check_vip_upgrade(user)
         else:
             txn = payment.pay_deposit(user_id, self._txn_counter + 1)
             self._txn_counter += 1
 
         return payment
+
+    def _check_vip_upgrade(self, user):
+        """
+        ตรวจสอบและอัปเกรด VIP status ตามยอดสะสม
+        - User ทั่วไป ยอด >= 5,000  → กลายเป็น VIPMember SILVER
+        - VIPMember อยู่แล้ว        → check_and_upgrade() เช็ค rank
+        """
+        spent = user._total_spent
+
+        if not isinstance(user, VIPMember):
+            # เช็คว่าถึงเกณฑ์ VIP ขั้นต่ำหรือยัง
+            if spent >= VIPMember.RANK_THRESHOLD["SILVER"]:
+                vip = VIPMember(
+                    user_id=user.user_id,
+                    name=user.name,
+                    email=user.email,
+                    phone_number=user._phone_number,
+                    rank=VIPMember.RANK_SILVER
+                )
+                # ย้าย state ทั้งหมด
+                vip._bookings_history       = user._bookings_history
+                vip._coupon_list            = user._coupon_list
+                vip._credit                 = user._credit
+                vip._status                 = user._status
+                vip._completed_tattoo_count = user._completed_tattoo_count
+                vip._total_spent            = spent
+                # เช็ค rank ทันทีหลังย้าย (อาจ qualify GOLD/PLATINUM เลย)
+                vip.check_and_upgrade()
+                self._user_list[user.user_id] = vip
+                print(f"[SoonSak] 🎉 {vip.name} ได้รับสถานะ VIPMember! "
+                      f"rank={vip.rank} (ยอดสะสม {spent:,.2f} บาท)")
+        else:
+            # เป็น VIP อยู่แล้ว → เช็ค rank upgrade
+            user.check_and_upgrade()
 
     def request_payment_sum(self, order_id: str) -> float:
         """
@@ -371,12 +441,26 @@ class SoonSak:
         artist.reject_job(booking, reason)
 
     def artist_complete_job(self, artist_id: str, booking: Booking):
-        """Artist กดงานเสร็จ"""
+        """
+        Artist กดงานเสร็จ
+        - เปลี่ยน Booking → COMPLETED
+        - เพิ่ม completed_tattoo_count ให้ User
+        - ถ้า User ทั่วไปสักครบ 3 ครั้ง → อัปเกรดเป็น VIPMember อัตโนมัติ
+        - ถ้าเป็น VIPMember อยู่แล้ว → เช็ค rank upgrade
+        """
         self._require_login(artist_id)
         artist = self.find_artist(artist_id)
         if artist is None:
             raise ValueError(f"ไม่พบ Artist {artist_id}")
         artist.complete_job(booking)
+
+        # ── อัปเดต completed count ของ User ──
+        user = self.find_user(booking.user_id)
+        if user is None:
+            return
+
+        user._completed_tattoo_count += 1
+        print(f"[SoonSak] {user.name} สักแล้วทั้งหมด {user._completed_tattoo_count} ครั้ง")
 
     def artist_request_studio(self, artist_id: str,
                               studio_name: str, location: str) -> StudioRequest:
@@ -501,141 +585,158 @@ class SoonSak:
 # ═══════════════════════════════════════════════
 
 if __name__ == "__main__":
+    from datetime import date
 
-    print("\n" + "═" * 60)
-    print("   DEMO: ระบบ SoonSak")
-    print("═" * 60 + "\n")
+    def section(title):
+        print(f"\n{'═'*60}")
+        print(f"  {title}")
+        print('═'*60)
 
-    # ── สร้างระบบ ──
+    section("DEMO: ระบบ SoonSak - Full Flow Test")
+
     system = SoonSak()
 
-    # ── 1. ลงทะเบียน Users ──
-    print("\n--- 1. ลงทะเบียน Users ---")
+    # ══════════════════════════════════════════
+    # SETUP: ลงทะเบียนทุกคน
+    # ══════════════════════════════════════════
+    section("1. ลงทะเบียน")
+
+    # User ทั่วไป (จะกลายเป็น VIP อัตโนมัติหลังสัก 3 ครั้ง)
     user1 = system.register_user("USR-001", "อาทิตย์", "sun@mail.com", "0811111111")
-    vip1 = system.register_user("USR-002", "มีนา", "mina@mail.com", "0822222222",
-                                 is_vip=True, vip_rank="GOLD")
+    # User ทั่วไปอีกคน (ใช้ทดสอบ cancel flow)
+    user2 = system.register_user("USR-002", "จันทร์", "moon@mail.com", "0833333333")
 
-    # ── 2. ลงทะเบียน Artist ──
-    print("\n--- 2. ลงทะเบียน Artist ---")
     artist1 = system.register_artist("ART-001", "ช่างแจ็ค", "jack@mail.com", experience=5)
+    artist2 = system.register_artist("ART-002", "ช่างแนน", "nan@mail.com", experience=2)
+    admin1  = system.register_admin("ADM-001", "ผู้ดูแล", "admin@soonsak.com")
 
-    # ── 3. ลงทะเบียน Admin ──
-    print("\n--- 3. สร้าง Admin ---")
-    admin1 = system.register_admin("ADM-001", "ผู้ดูแล", "admin@soonsak.com")
+    # ── Login ──
+    for uid in ["ADM-001", "ART-001", "ART-002", "USR-001", "USR-002"]:
+        system.login(uid)
 
-    # ── 4. Login ──
-    print("\n--- 4. Login ---")
-    system.login("ADM-001")
-    system.login("ART-001")
-    system.login("USR-001")
-    system.login("USR-002")
-
-    # ── 5. Admin อนุมัติ Artist ──
-    print("\n--- 5. Admin อนุมัติ Artist ---")
+    # ══════════════════════════════════════════
+    # SETUP: Admin อนุมัติ Artist + ตั้ง Policy
+    # ══════════════════════════════════════════
+    section("2. Admin อนุมัติ Artist")
     system.admin_approve_artist("ADM-001", "ART-001")
+    system.admin_approve_artist("ADM-001", "ART-002")
 
-    # ── 6. Artist ตั้ง Deposit Policy ──
-    print("\n--- 6. Artist ตั้ง Deposit Policy ---")
-    policy = PercentDepositPolicy(percent=30)   # มัดจำ 30%
-    artist1.set_deposit_policy(policy)
+    policy_percent = PercentDepositPolicy(percent=30)
+    policy_fixed   = FixedDepositPolicy(fixed_amount=500)
+    artist1.set_deposit_policy(policy_percent)
+    artist2.set_deposit_policy(policy_fixed)
 
-    # ── 7. สร้าง Booking ──
-    print("\n--- 7. สร้าง Booking (User ทั่วไป) ---")
-    booking1 = system.create_booking(
-        user_id="USR-001",
-        artist_id="ART-001",
-        body_part="แขน",
-        size="กลาง",
-        color_tone="ขาว-ดำ",
-        base_price=3000.0
-    )
+    # ══════════════════════════════════════════
+    # FLOW A: Reject Job (Artist ปฏิเสธงาน)
+    # ══════════════════════════════════════════
+    section("3. Flow A — Artist ปฏิเสธงาน")
+    b_reject = system.create_booking("USR-001", "ART-001", "ข้อมือ", "เล็ก", "ขาว-ดำ", 800.0)
+    system.artist_reject_job("ART-001", b_reject, reason="ไม่ว่างในวันที่นัด")
+    print(f"  → Booking status: {b_reject.status}")  # CANCELLED
 
-    # ── 8. Booking ด้วย VIP ──
-    print("\n--- 8. Booking (VIP Member) ---")
-    booking2 = system.create_booking(
-        user_id="USR-002",
-        artist_id="ART-001",
-        body_part="หลัง",
-        size="ใหญ่",
-        color_tone="สี",
-        base_price=8000.0
-    )
+    # ══════════════════════════════════════════
+    # FLOW B: User ยกเลิก Booking เอง
+    # ══════════════════════════════════════════
+    section("4. Flow B — User ยกเลิก Booking เอง")
+    b_cancel = system.create_booking("USR-002", "ART-002", "ต้นแขน", "กลาง", "สี", 2000.0)
+    system.cancel_booking("USR-002", b_cancel)
+    print(f"  → Booking status: {b_cancel.status}")  # CANCELLED
 
-    # ── 9. Artist รับงาน ──
-    print("\n--- 9. Artist รับงาน ---")
-    system.artist_accept_job("ART-001", booking1)
-    system.artist_accept_job("ART-001", booking2)
+    # ══════════════════════════════════════════
+    # FLOW C: สักครั้งแรก 3,000 บาท → ยังไม่ VIP
+    # ══════════════════════════════════════════
+    section("5. Flow C — จอง → มัดจำ → ชำระเต็ม (ยอดสะสม 3,000)")
+    b1 = system.create_booking("USR-001", "ART-001", "แขน", "กลาง", "ขาว-ดำ", 3000.0)
+    system.artist_accept_job("ART-001", b1)
+    o1 = system.create_order(b1)
+    system.process_payment("USR-001", o1, Promptpay("0811111111"), policy_percent)
+    system.process_payment("USR-001", o1, Promptpay("0811111111"), pay_full=True)
+    o1.order_phase()
+    system.artist_complete_job("ART-001", b1)
+    system.rate_artist("USR-001", "ART-001", b1, 5, "สวยมาก!")
+    u = system.find_user("USR-001")
+    print(f"  → ยอดสะสม: {u._total_spent:,.2f} บาท | type: {type(u).__name__}")
 
-    # ── 10. สร้าง Order และชำระเงิน ──
-    print("\n--- 10. ชำระมัดจำ ---")
-    order1 = system.create_order(booking1)
-    promptpay = Promptpay(phone_or_id="0811111111")
-    payment1 = system.process_payment(
-        user_id="USR-001",
-        order=order1,
-        payment_method=promptpay,
-        deposit_policy=policy,   # PercentDepositPolicy 30%
-        pay_full=False
-    )
-    order1.order_phase()
+    # ══════════════════════════════════════════
+    # FLOW D: สักอีก 2,500 → รวม 5,500 → Trigger SILVER VIP
+    # ══════════════════════════════════════════
+    section("6. Flow D — ยอดสะสมถึง 5,000 → Trigger VIP SILVER")
+    b2 = system.create_booking("USR-001", "ART-001", "หลัง", "กลาง", "สี", 2500.0)
+    system.artist_accept_job("ART-001", b2)
+    o2 = system.create_order(b2)
+    system.process_payment("USR-001", o2, Promptpay("0811111111"), policy_percent)
+    system.process_payment("USR-001", o2, Promptpay("0811111111"), pay_full=True)
+    system.artist_complete_job("ART-001", b2)
+    system.rate_artist("USR-001", "ART-001", b2, 4, "โอเคมาก")
+    u = system.find_user("USR-001")
+    print(f"  → ยอดสะสม: {u._total_spent:,.2f} บาท | type: {type(u).__name__}")
+    if isinstance(u, VIPMember):
+        print(f"  → {u.vip_status_summary()}")
 
-    # ── 11. VIP ชำระพร้อมส่วนลด ──
-    print("\n--- 11. VIP คำนวณส่วนลด ---")
-    base = booking2.base_price
-    discount = vip1.calculate_discount(base)   # GOLD = 10%
-    print(f"  ราคาเต็ม: {base:.2f} บาท | ส่วนลด VIP: {discount:.2f} บาท | จ่ายจริง: {base - discount:.2f} บาท")
+    # ══════════════════════════════════════════
+    # FLOW E: สักต่อให้ถึง 15,000 → GOLD
+    # ══════════════════════════════════════════
+    section("7. Flow E — ยอดสะสมถึง 15,000 → Trigger VIP GOLD")
+    # ต้องการอีก ~10,000 บาท จากยอดปัจจุบัน
+    for part, price in [("ขา", 4000.0), ("ต้นคอ", 3500.0), ("หน้าอก", 3000.0)]:
+        b = system.create_booking("USR-001", "ART-001", part, "กลาง", "สี", price)
+        system.artist_accept_job("ART-001", b)
+        o = system.create_order(b)
+        system.process_payment("USR-001", o, Promptpay("0811111111"), policy_percent)
+        system.process_payment("USR-001", o, Promptpay("0811111111"), pay_full=True)
+        system.artist_complete_job("ART-001", b)
+    u = system.find_user("USR-001")
+    print(f"  → ยอดสะสม: {u._total_spent:,.2f} บาท | type: {type(u).__name__}")
+    if isinstance(u, VIPMember):
+        print(f"  → {u.vip_status_summary()}")
 
-    order2 = system.create_order(booking2)
-    payment2 = system.process_payment(
-        user_id="USR-002",
-        order=order2,
-        payment_method=Promptpay("0822222222"),
-        deposit_policy=FixedDepositPolicy(500),  # มัดจำ 500 บาทตายตัว
-        pay_full=False
-    )
+    # ══════════════════════════════════════════
+    # FLOW F: VIP GOLD จอง + Discount + Coupon
+    # ══════════════════════════════════════════
+    section("8. Flow F — VIP GOLD Booking + Coupon")
+    system.admin_add_coupon("ADM-001", "USR-001", "SOONSAK10", 10, date(2026, 12, 31))
 
-    # ── 12. Artist ทำงานเสร็จ ──
-    print("\n--- 12. งานเสร็จ ---")
-    system.artist_complete_job("ART-001", booking1)
+    b_vip = system.create_booking("USR-001", "ART-001", "หลังเต็ม", "ใหญ่", "สี", 8000.0)
+    system.artist_accept_job("ART-001", b_vip)
+    print(f"\n  ราคาเต็ม: 8,000 บาท")
+    o_vip = system.create_order(b_vip, apply_vip_discount=True, coupon_code="SOONSAK10")
+    system.process_payment("USR-001", o_vip, Promptpay("0811111111"), policy_percent)
+    system.process_payment("USR-001", o_vip, Promptpay("0811111111"), pay_full=True)
+    o_vip.order_phase()
+    system.artist_complete_job("ART-001", b_vip)
+    system.rate_artist("USR-001", "ART-001", b_vip, 5, "ดีมากตลอด!")
+    u = system.find_user("USR-001")
+    if isinstance(u, VIPMember):
+        print(f"\n  → VIP Status ล่าสุด: {u.vip_status_summary()}")
 
-    # ── 13. User ให้คะแนน ──
-    print("\n--- 13. Rate Artist ---")
-    rating = system.rate_artist(
-        user_id="USR-001",
-        artist_id="ART-001",
-        booking=booking1,
-        score=5,
-        comment="สวยมากค่ะ!"
-    )
-
-    # ── 14. Admin เพิ่ม Coupon ──
-    print("\n--- 14. Admin เพิ่ม Coupon ---")
-    from datetime import date
-    system.admin_add_coupon(
-        admin_id="ADM-001",
-        user_id="USR-001",
-        coupon_code="SOONSAK10",
-        discount=10,
-        expired=date(2026, 12, 31)
-    )
-
-    # ── 15. Artist ขอเปิด Studio ──
-    print("\n--- 15. Artist ขอ Studio ---")
+    # ══════════════════════════════════════════
+    # FLOW G: Studio Request
+    # ══════════════════════════════════════════
+    section("9. Flow G — Studio Request")
     req = system.artist_request_studio("ART-001", "Jack's Ink Studio", "กรุงเทพฯ")
     system.admin_approve_studio("ADM-001", req)
+    req2 = system.artist_request_studio("ART-002", "Nan's Art Studio", "เชียงใหม่")
+    system.admin_reject_studio("ADM-001", req2)
+    print(f"  → req2 status: {req2.status}")  # REJECTED
 
-    # ── 16. Reports ──
-    print("\n--- 16. รายงาน ---")
+    # ══════════════════════════════════════════
+    # REPORTS
+    # ══════════════════════════════════════════
+    section("10. Reports สรุปทั้งระบบ")
     system.report_artist_ratings("ART-001")
     system.report_bank_balance()
 
-    # ── 17. Logout ──
-    print("\n--- 17. Logout ---")
-    system.logout("USR-001")
-    system.logout("USR-002")
-    system.logout("ART-001")
-    system.logout("ADM-001")
+    print("\n  📋 User List:")
+    for uid, u in system._user_list.items():
+        utype = type(u).__name__
+        spent = f"{u._total_spent:,.2f}"
+        rank  = f" | rank={u.rank}" if isinstance(u, VIPMember) else ""
+        print(f"    [{uid}] {u.name} | {utype}{rank} | ยอดสะสม {spent} บาท")
 
-    print("\n" + "═" * 60)
-    print("   DEMO เสร็จสิ้น")
-    print("═" * 60)
+    section("11. Logout")
+    for uid in ["USR-001", "USR-002", "ART-001", "ART-002", "ADM-001"]:
+        system.logout(uid)
+
+    print("\n" + "═"*60)
+    print("   DEMO เสร็จสิ้น ✅")
+    print("═"*60)

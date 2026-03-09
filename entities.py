@@ -425,6 +425,8 @@ class User:
         self._transaction_list: list = []
         self._appointment_list: list = []
         self._submitting: bool = False
+        self._completed_tattoo_count: int = 0  # นับจำนวนการสักที่เสร็จแล้ว
+        self._total_spent: float = 0.0         # ยอดเงินสะสม full payment ทั้งหมด
         # Business Rule (A3): จำกัดจำนวน
         self._max_calendar: int = 60         # จองล่วงหน้าได้สูงสุด 60 วัน
         self._max_bookings: int = 3          # จองพร้อมกันได้สูงสุด 3 ครั้ง
@@ -457,6 +459,21 @@ class User:
     @property
     def credit(self):
         return self._credit
+
+    @property
+    def completed_tattoo_count(self):
+        return self._completed_tattoo_count
+
+    @property
+    def total_spent(self):
+        """ยอดเงินสะสมทั้งหมดจากการชำระ full payment"""
+        return self._total_spent
+
+    def add_spent(self, amount: float):
+        """เพิ่มยอดเงินสะสม — เรียกหลัง pay_full สำเร็จ"""
+        if amount > 0:
+            self._total_spent += amount
+            print(f"[User] {self._name} ยอดสะสม: {self._total_spent:.2f} บาท")
 
     def add_credit(self, amount: float):
         """เติมเงินเข้าระบบ"""
@@ -526,17 +543,31 @@ class VIPMember(User):
     """
     สมาชิก VIP ได้รับสิทธิพิเศษเพิ่มเติม
     Inheritance ลำดับที่ 1: User → VIPMember
-    - rank: ระดับ VIP (SILVER / GOLD / PLATINUM)
-    - max_bookings และ max_calendar สูงกว่า User ทั่วไป
+
+    rank อัปเกรดอัตโนมัติตามยอดเงินสะสม (full payment) ใน _total_spent:
+      0      - 4,999  บาท → ยังไม่เป็น VIP
+      5,000  - 14,999 บาท → SILVER  (ส่วนลด 5%)
+      15,000 - 29,999 บาท → GOLD    (ส่วนลด 10%)
+      30,000+ บาท         → PLATINUM (ส่วนลด 15%)
+
+    User ทั่วไปจะกลายเป็น VIPMember เมื่อยอดสะสมถึง 5,000 บาท
+    (controller เรียก check_vip_upgrade() หลัง pay_full ทุกครั้ง)
     """
 
-    RANK_SILVER = "SILVER"
-    RANK_GOLD = "GOLD"
+    RANK_SILVER   = "SILVER"
+    RANK_GOLD     = "GOLD"
     RANK_PLATINUM = "PLATINUM"
 
+    # เกณฑ์ยอดเงินสะสม (บาท) สำหรับแต่ละ rank
+    RANK_THRESHOLD = {
+        "SILVER":    5_000,
+        "GOLD":     15_000,
+        "PLATINUM": 30_000,
+    }
+
     DISCOUNT_RATE = {
-        "SILVER": 5,
-        "GOLD": 10,
+        "SILVER":    5,
+        "GOLD":     10,
         "PLATINUM": 15,
     }
 
@@ -545,12 +576,31 @@ class VIPMember(User):
         super().__init__(user_id, name, email, phone_number)
         self._rank = rank
         # VIP ได้สิทธิ์จองมากกว่า (B1: Polymorphism via override)
-        self._max_bookings = 6       # จองพร้อมกันได้ 6 ครั้ง
-        self._max_calendar = 120     # จองล่วงหน้าได้ 120 วัน
+        self._max_bookings = 6    # จองพร้อมกันได้ 6 ครั้ง
+        self._max_calendar = 120  # จองล่วงหน้าได้ 120 วัน
 
     @property
     def rank(self):
         return self._rank
+
+    def check_and_upgrade(self):
+        """
+        เช็คยอดสะสมแล้วอัปเกรด rank อัตโนมัติ
+        เรียกหลัง add_spent() ทุกครั้ง
+        """
+        spent = self._total_spent
+        if spent >= self.RANK_THRESHOLD["PLATINUM"]:
+            new_rank = self.RANK_PLATINUM
+        elif spent >= self.RANK_THRESHOLD["GOLD"]:
+            new_rank = self.RANK_GOLD
+        else:
+            new_rank = self.RANK_SILVER
+
+        if new_rank != self._rank:
+            old_rank = self._rank
+            self._rank = new_rank
+            print(f"[VIPMember] 🎉 {self._name} อัปเกรด rank: {old_rank} → {new_rank} "
+                  f"(ยอดสะสม {spent:,.2f} บาท)")
 
     def calculate_discount(self, base_price: float) -> float:
         """
@@ -559,18 +609,35 @@ class VIPMember(User):
         """
         rate = self.DISCOUNT_RATE.get(self._rank, 0)
         discount = base_price * (rate / 100)
-        print(f"[VIP] ส่วนลด {rate}% = {discount:.2f} บาท")
+        print(f"[VIP] rank={self._rank} ส่วนลด {rate}% = {discount:.2f} บาท")
         return discount
 
     def upgrade_rank(self, new_rank: str):
-        """อัปเกรด rank ของ VIP"""
+        """อัปเกรด rank แบบ manual โดย Admin"""
         if new_rank not in self.DISCOUNT_RATE:
             raise ValueError(f"Rank ไม่ถูกต้อง: {new_rank}")
+        old = self._rank
         self._rank = new_rank
-        print(f"[VIPMember] อัปเกรด rank เป็น {new_rank}")
+        print(f"[VIPMember] Admin อัปเกรด rank: {old} → {new_rank}")
+
+    def vip_status_summary(self) -> str:
+        """สรุปสถานะ VIP พร้อมบอกว่าต้องสะสมอีกเท่าไหร่"""
+        spent = self._total_spent
+        next_info = ""
+        if self._rank == self.RANK_SILVER:
+            need = self.RANK_THRESHOLD["GOLD"] - spent
+            next_info = f" | อีก {need:,.0f} บาท → GOLD"
+        elif self._rank == self.RANK_GOLD:
+            need = self.RANK_THRESHOLD["PLATINUM"] - spent
+            next_info = f" | อีก {need:,.0f} บาท → PLATINUM"
+        else:
+            next_info = " | ระดับสูงสุดแล้ว"
+        return (f"rank={self._rank} | ยอดสะสม {spent:,.2f} บาท"
+                f" | ส่วนลด {self.DISCOUNT_RATE[self._rank]}%{next_info}")
 
     def __repr__(self):
-        return f"<VIPMember id={self._user_id} name={self._name} rank={self._rank}>"
+        return (f"<VIPMember id={self._user_id} name={self._name} "
+                f"rank={self._rank} spent={self._total_spent:,.2f}>")
 
 
 # ─────────────────────────────────────────────

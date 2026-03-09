@@ -618,65 +618,78 @@ def run_full_demo() -> str:
         _request_registry.clear()
 
         # ── 1. Register ──
-        user1 = _system.register_user("USR-001", "อาทิตย์", "sun@mail.com", "0811111111")
-        vip1  = _system.register_user("USR-002", "มีนา", "mina@mail.com", "0822222222",
-                                       is_vip=True, vip_rank="GOLD")
+        user1   = _system.register_user("USR-001", "อาทิตย์", "sun@mail.com", "0811111111")
+        user2   = _system.register_user("USR-002", "จันทร์", "moon@mail.com", "0833333333")
         artist1 = _system.register_artist("ART-001", "ช่างแจ็ค", "jack@mail.com", experience=5)
+        artist2 = _system.register_artist("ART-002", "ช่างแนน", "nan@mail.com", experience=2)
         admin1  = _system.register_admin("ADM-001", "ผู้ดูแล", "admin@soonsak.com")
 
         # ── 2. Login ──
-        _system.login("ADM-001")
-        _system.login("ART-001")
-        _system.login("USR-001")
-        _system.login("USR-002")
+        for uid in ["ADM-001", "ART-001", "ART-002", "USR-001", "USR-002"]:
+            _system.login(uid)
 
-        # ── 3. Admin อนุมัติ Artist ──
+        # ── 3. Admin อนุมัติ + Policy ──
         _system.admin_approve_artist("ADM-001", "ART-001")
+        _system.admin_approve_artist("ADM-001", "ART-002")
+        policy_percent = PercentDepositPolicy(percent=30)
+        policy_fixed   = FixedDepositPolicy(fixed_amount=500)
+        artist1.set_deposit_policy(policy_percent)
+        artist2.set_deposit_policy(policy_fixed)
 
-        # ── 4. Deposit Policy ──
-        policy = PercentDepositPolicy(percent=30)
-        artist1.set_deposit_policy(policy)
+        # ── 4. Flow A: Artist Reject ──
+        b_reject = _system.create_booking("USR-001","ART-001","ข้อมือ","เล็ก","ขาว-ดำ",800.0)
+        _booking_registry[b_reject.booking_id] = b_reject
+        _system.artist_reject_job("ART-001", b_reject, reason="ไม่ว่างในวันที่นัด")
 
-        # ── 5. Booking ──
-        b1 = _system.create_booking(
-            "USR-001", "ART-001", "แขน", "กลาง", "ขาว-ดำ", 3000.0)
-        b2 = _system.create_booking(
-            "USR-002", "ART-001", "หลัง", "ใหญ่", "สี", 8000.0)
+        # ── 5. Flow B: User Cancel ──
+        b_cancel = _system.create_booking("USR-002","ART-002","ต้นแขน","กลาง","สี",2000.0)
+        _booking_registry[b_cancel.booking_id] = b_cancel
+        _system.cancel_booking("USR-002", b_cancel)
+
+        # ── 6. Flow C: Normal + Pay Full ──
+        b1 = _system.create_booking("USR-001","ART-001","แขน","กลาง","ขาว-ดำ",3000.0)
         _booking_registry[b1.booking_id] = b1
-        _booking_registry[b2.booking_id] = b2
-
-        # ── 6. Artist รับงาน ──
         _system.artist_accept_job("ART-001", b1)
-        _system.artist_accept_job("ART-001", b2)
-
-        # ── 7. Payment ──
         o1 = _system.create_order(b1)
         _order_registry[o1.order_id] = o1
-        _system.process_payment("USR-001", o1, Promptpay("0811111111"), policy)
-        o1.order_phase()
-
-        # ── 8. VIP Discount ──
-        discount = vip1.calculate_discount(b2.base_price)
-        print(f"VIP ส่วนลด: {discount:.2f} บาท (ราคาจริง: {b2.base_price - discount:.2f})")
-        o2 = _system.create_order(b2)
-        _order_registry[o2.order_id] = o2
-        _system.process_payment("USR-002", o2, Promptpay("0822222222"),
-                                 FixedDepositPolicy(500))
-
-        # ── 9. Complete + Rate ──
+        _system.process_payment("USR-001", o1, Promptpay("0811111111"), policy_percent)
+        _system.process_payment("USR-001", o1, Promptpay("0811111111"), pay_full=True)
         _system.artist_complete_job("ART-001", b1)
-        _system.rate_artist("USR-001", "ART-001", b1, 5, "สวยมากค่ะ!")
+        _system.rate_artist("USR-001","ART-001", b1, 5, "สวยมาก!")
 
-        # ── 10. Coupon ──
-        _system.admin_add_coupon("ADM-001", "USR-001", "SOONSAK10",
-                                  10, date(2026, 12, 31))
+        # ── 7. Flow D: สักให้ครบ 3 ครั้ง → Trigger VIP ──
+        for part, price in [("หลัง", 5000.0), ("ขา", 4000.0)]:
+            b = _system.create_booking("USR-001","ART-001", part,"ใหญ่","สี", price)
+            _booking_registry[b.booking_id] = b
+            _system.artist_accept_job("ART-001", b)
+            o = _system.create_order(b)
+            _order_registry[o.order_id] = o
+            _system.process_payment("USR-001", o, Promptpay("0811111111"), policy_percent)
+            _system.process_payment("USR-001", o, Promptpay("0811111111"), pay_full=True)
+            _system.artist_complete_job("ART-001", b)
+            _system.rate_artist("USR-001","ART-001", b, 4, "โอเคมาก")
 
-        # ── 11. Studio ──
-        req = _system.artist_request_studio("ART-001", "Jack's Ink Studio", "กรุงเทพฯ")
+        # ── 8. Flow E: VIP + Coupon ──
+        _system.admin_add_coupon("ADM-001","USR-001","SOONSAK10",10,date(2026,12,31))
+        b_vip = _system.create_booking("USR-001","ART-001","หน้าอก","ใหญ่","สี",6000.0)
+        _booking_registry[b_vip.booking_id] = b_vip
+        _system.artist_accept_job("ART-001", b_vip)
+        o_vip = _system.create_order(b_vip, apply_vip_discount=True, coupon_code="SOONSAK10")
+        _order_registry[o_vip.order_id] = o_vip
+        _system.process_payment("USR-001", o_vip, Promptpay("0811111111"), policy_percent)
+        _system.process_payment("USR-001", o_vip, Promptpay("0811111111"), pay_full=True)
+        _system.artist_complete_job("ART-001", b_vip)
+        _system.rate_artist("USR-001","ART-001", b_vip, 5, "ดีมากตลอด!")
+
+        # ── 9. Flow F: Studio ──
+        req = _system.artist_request_studio("ART-001","Jack's Ink Studio","กรุงเทพฯ")
         _request_registry[req.request_id] = req
         _system.admin_approve_studio("ADM-001", req)
+        req2 = _system.artist_request_studio("ART-002","Nan's Studio","เชียงใหม่")
+        _request_registry[req2.request_id] = req2
+        _system.admin_reject_studio("ADM-001", req2)
 
-        # ── 12. Reports ──
+        # ── 10. Reports ──
         _system.report_artist_ratings("ART-001")
         _system.report_bank_balance()
 
