@@ -1,69 +1,7 @@
 """
-mcp_server.py
-=============
-FastMCP Server สำหรับระบบ SoonSak
-ทำให้ Claude Desktop สามารถเรียกใช้และทดสอบ OOP ทั้งหมดได้โดยตรง
-
-วิธีรัน:
-    pip install fastmcp
-    python mcp_server.py
-
-หรือใช้กับ Claude Desktop โดยเพิ่มใน claude_desktop_config.json:
-{
-  "mcpServers": {
-    "soonsak": {
-      "command": "python",
-      "args": ["/absolute/path/to/mcp_server.py"]
-    }
-  }
-}
-
-Tools ที่ expose:
-─────────────────────────────────────────────
-👤 USER
-  - register_user         ลงทะเบียน User / VIP
-  - login                 เข้าสู่ระบบ
-  - logout                ออกจากระบบ
-  - get_user_info         ดูข้อมูล User
-  - add_coupon_to_user    เพิ่มคูปอง (Admin)
-  - suspend_user          ระงับบัญชี (Admin)
-
-🎨 ARTIST
-  - register_artist       ลงทะเบียน Artist
-  - approve_artist        Admin อนุมัติ Artist
-  - set_deposit_policy    Artist ตั้ง deposit policy
-  - artist_accept_job     Artist รับงาน
-  - artist_reject_job     Artist ปฏิเสธงาน
-  - artist_complete_job   Artist งานเสร็จ
-  - request_studio        Artist ขอ Studio
-  - get_artist_info       ดูข้อมูล Artist
-
-📋 BOOKING
-  - create_booking        สร้างการจอง
-  - cancel_booking        ยกเลิกการจอง
-  - get_booking_info      ดูข้อมูล Booking
-  - rate_artist           รีวิว Artist
-
-💳 PAYMENT
-  - create_order          สร้าง Order
-  - pay_deposit           ชำระมัดจำ
-  - pay_full              ชำระเต็มจำนวน
-  - get_order_info        ดูข้อมูล Order
-
-🏢 STUDIO
-  - approve_studio        Admin อนุมัติ Studio
-  - reject_studio         Admin ปฏิเสธ Studio
-
-📊 REPORTS
-  - report_bank           รายงานยอดเงิน
-  - report_artist_rating  รายงานคะแนน Artist
-  - list_all_users        ดูรายชื่อ User ทั้งหมด
-  - list_all_artists      ดูรายชื่อ Artist ทั้งหมด
-
-🧪 TEST
-  - run_full_demo         รัน demo สมบูรณ์ทั้งระบบ
-  - reset_system          รีเซ็ตระบบกลับเป็น state ว่าง
-─────────────────────────────────────────────
+mcp_server.py — FastMCP Server สำหรับระบบ SoonSak
+- ทุก attribute เป็น private (__attr)
+- ไม่ใช้ Dict เลย ใช้ list + linear search แทน registries
 """
 
 import sys
@@ -72,7 +10,6 @@ from contextlib import redirect_stdout
 from datetime import date, datetime
 from typing import Optional
 
-# ── import OOP classes ──
 from entities import (
     User, VIPMember, Artist, Admin,
     Studio, Coupon, Rating,
@@ -89,31 +26,32 @@ from payment import (
 )
 from controller import SoonSak
 
-# ── FastMCP ──
 from fastmcp import FastMCP
-
-# ─────────────────────────────────────────────
-# สร้าง FastMCP App และ SoonSak instance เดียว
-# (state อยู่ใน memory ตลอด session)
-# ─────────────────────────────────────────────
 
 mcp = FastMCP(
     name="SoonSak OOP Server",
     instructions="""
     MCP Server สำหรับทดสอบระบบ SoonSak ที่เขียนด้วย OOP Python
     ใช้ tools ด้านล่างเพื่อสร้าง User, Artist, Booking, Payment และทดสอบทุก flow
-    สามารถรัน run_full_demo เพื่อทดสอบระบบทั้งหมดในครั้งเดียว
-    หรือเรียกแต่ละ tool เพื่อทดสอบแยกส่วนได้
     """
 )
 
 # ── Global System Instance ──
-# state จะถูกเก็บไว้ตลอด session นี้
 _system: SoonSak = SoonSak()
 
-# ── helper: capture stdout ออกมาเป็น string ──
+# ── Registries — ใช้ list แทน dict ──
+_booking_list: list  = []   # เก็บ Booking objects
+_order_list: list    = []   # เก็บ Order objects
+_request_list: list  = []   # เก็บ StudioRequest objects
+
+# ── Seed Admin AD001 (login ไว้ล่วงหน้า) ──
+_admin = _system.register_admin("AD001", "Super Admin", "admin@soonsak.com", "admin123")
+_system._logged_in_users.append("AD001")
+
+
+# ── helpers: linear search แทน dict.get() ──
+
 def _capture(fn, *args, **kwargs) -> str:
-    """รัน fn แล้วจับ stdout กลับมาเป็น string เพื่อส่งให้ Claude อ่าน"""
     buf = io.StringIO()
     try:
         with redirect_stdout(buf):
@@ -124,6 +62,41 @@ def _capture(fn, *args, **kwargs) -> str:
         return output if output.strip() else "✅ สำเร็จ (ไม่มี output)"
     except Exception as e:
         return f"❌ Error: {type(e).__name__}: {e}"
+
+
+def _find_booking(booking_id: str) -> Booking:
+    for b in _booking_list:
+        if b.booking_id == booking_id:
+            return b
+    return None
+
+
+def _find_order(order_id: str) -> Order:
+    for o in _order_list:
+        if o.order_id == order_id:
+            return o
+    return None
+
+
+def _find_request(request_id: str) -> StudioRequest:
+    for r in _request_list:
+        if r.request_id == request_id:
+            return r
+    return None
+
+
+def _get_booking(booking_id: str):
+    b = _find_booking(booking_id)
+    if b is None:
+        return f"❌ ไม่พบ Booking {booking_id} — กรุณาสร้างด้วย create_booking ก่อน"
+    return b
+
+
+def _get_order(order_id: str):
+    o = _find_order(order_id)
+    if o is None:
+        return f"❌ ไม่พบ Order {order_id} — กรุณาสร้างด้วย create_order ก่อน"
+    return o
 
 
 # ═══════════════════════════════════════════════
@@ -145,17 +118,30 @@ def register_user(
     - is_vip: True = สร้างเป็น VIPMember
     - vip_rank: SILVER / GOLD / PLATINUM (ใช้เมื่อ is_vip=True)
     """
-    return _capture(_system.register_user, user_id, name, email, phone, is_vip, vip_rank)
+    password = "1234"
+    if is_vip:
+        buf = io.StringIO()
+        try:
+            with redirect_stdout(buf):
+                if _system.find_user(user_id):
+                    return f"❌ User {user_id} มีอยู่แล้ว"
+                vip = VIPMember(user_id, name, email, phone, password, vip_rank)
+                _system._user_list.append(vip)
+                print(f"[Register] ลงทะเบียน {vip} สำเร็จ (VIP rank={vip_rank})")
+            return buf.getvalue() + f"\n✅ Return: {vip}"
+        except Exception as e:
+            return f"❌ Error: {e}"
+    return _capture(_system.register_user, user_id, name, email, phone, password)
 
 
 @mcp.tool()
-def login(user_id: str) -> str:
+def login(user_id: str, password: str) -> str:
     """
     เข้าสู่ระบบ
     - ใช้ได้กับ User, Artist, Admin
     - ต้อง login ก่อนถึงจะทำ action อื่นได้
     """
-    return _capture(_system.login, user_id)
+    return _capture(_system.login, user_id, password)
 
 
 @mcp.tool()
@@ -174,21 +160,16 @@ def get_user_info(user_id: str) -> str:
     if user is None:
         return f"❌ ไม่พบ User {user_id}"
     history = user.view_history()
-    info = {
-        "user_id": user.user_id,
-        "name": user.name,
-        "email": user.email,
-        "status": user.status,
-        "credit": user.credit,
-        "type": "VIPMember" if isinstance(user, VIPMember) else "User",
-        "vip_rank": user.rank if isinstance(user, VIPMember) else "-",
-        "max_bookings": user.max_bookings,
-        "max_calendar_days": user.max_calendar,
-        "booking_history_count": len(history),
-    }
     lines = [f"👤 User Info: {user_id}"]
-    for k, v in info.items():
-        lines.append(f"  {k}: {v}")
+    lines.append(f"  name                 : {user.name}")
+    lines.append(f"  email                : {user.email}")
+    lines.append(f"  status               : {user.status}")
+    lines.append(f"  credit               : {user.credit}")
+    lines.append(f"  type                 : {'VIPMember' if isinstance(user, VIPMember) else 'User'}")
+    lines.append(f"  vip_rank             : {user.rank if isinstance(user, VIPMember) else '-'}")
+    lines.append(f"  max_bookings         : {user.max_bookings}")
+    lines.append(f"  max_calendar_days    : {user.max_calendar}")
+    lines.append(f"  booking_history_count: {len(history)}")
     return "\n".join(lines)
 
 
@@ -236,7 +217,8 @@ def register_artist(
     - staff_id: รหัส เช่น ART-001
     - experience: ประสบการณ์เป็นปี
     """
-    return _capture(_system.register_artist, staff_id, name, email, experience)
+    password = "1234"
+    return _capture(_system.register_artist, staff_id, name, email, password, experience)
 
 
 @mcp.tool()
@@ -249,11 +231,7 @@ def approve_artist(admin_id: str, artist_id: str) -> str:
 
 
 @mcp.tool()
-def set_deposit_policy(
-    artist_id: str,
-    policy_type: str,
-    value: float
-) -> str:
+def set_deposit_policy(artist_id: str, policy_type: str, value: float) -> str:
     """
     Artist ตั้งนโยบายมัดจำ
     - policy_type: "percent" หรือ "fixed"
@@ -262,7 +240,6 @@ def set_deposit_policy(
     artist = _system.find_artist(artist_id)
     if artist is None:
         return f"❌ ไม่พบ Artist {artist_id}"
-
     buf = io.StringIO()
     try:
         with redirect_stdout(buf):
@@ -285,13 +262,9 @@ def get_artist_info(artist_id: str) -> str:
     - แสดง status, experience, deposit policy, คะแนนเฉลี่ย
     """
     try:
-        info = _system.view_artist(artist_id)
-        lines = [f"🎨 Artist Info: {artist_id}"]
-        for k, v in info.items():
-            lines.append(f"  {k}: {v}")
-        return "\n".join(lines)
+        return _system.view_artist(artist_id)
     except Exception as e:
-        return f"❌ Error: {e}"
+        return f"❌ Error: {type(e).__name__}: {e}"
 
 
 @mcp.tool()
@@ -308,9 +281,7 @@ def artist_accept_job(artist_id: str, booking_id: str) -> str:
 
 @mcp.tool()
 def artist_reject_job(artist_id: str, booking_id: str, reason: str = "") -> str:
-    """
-    Artist ปฏิเสธงาน → Booking status เปลี่ยนเป็น CANCELLED
-    """
+    """Artist ปฏิเสธงาน → Booking status เปลี่ยนเป็น CANCELLED"""
     booking = _get_booking(booking_id)
     if isinstance(booking, str):
         return booking
@@ -331,10 +302,15 @@ def artist_complete_job(artist_id: str, booking_id: str) -> str:
 
 @mcp.tool()
 def request_studio(artist_id: str, studio_name: str, location: str) -> str:
-    """
-    Artist ส่งคำขอเปิด Studio ใหม่ (รอ Admin อนุมัติ)
-    """
-    return _capture(_system.artist_request_studio, artist_id, studio_name, location)
+    """Artist ส่งคำขอเปิด Studio ใหม่ (รอ Admin อนุมัติ)"""
+    buf = io.StringIO()
+    try:
+        with redirect_stdout(buf):
+            req = _system.artist_request_studio(artist_id, studio_name, location)
+        _request_list.append(req)
+        return buf.getvalue() + f"\n✅ request_id = {req.request_id}"
+    except Exception as e:
+        return f"❌ Error: {type(e).__name__}: {e}"
 
 
 # ═══════════════════════════════════════════════
@@ -359,12 +335,18 @@ def create_booking(
     - color_tone: ขาว-ดำ / สี
     - base_price: ราคาประมาณ (บาท)
     """
-    return _capture(
-        _system.create_booking,
-        user_id, artist_id,
-        body_part, size, color_tone,
-        base_price, reference_image
-    )
+    buf = io.StringIO()
+    try:
+        with redirect_stdout(buf):
+            booking = _system.create_booking(
+                user_id, artist_id,
+                body_part, size, color_tone,
+                base_price, reference_image
+            )
+        _booking_list.append(booking)
+        return buf.getvalue() + f"\n✅ booking_id = {booking.booking_id}"
+    except Exception as e:
+        return f"❌ Error: {type(e).__name__}: {e}"
 
 
 @mcp.tool()
@@ -381,18 +363,11 @@ def cancel_booking(user_id: str, booking_id: str) -> str:
 
 @mcp.tool()
 def get_booking_info(booking_id: str) -> str:
-    """
-    ดูข้อมูล Booking ทั้งหมด
-    - แสดง status, user, artist, ราคา, นัดหมาย
-    """
+    """ดูข้อมูล Booking ทั้งหมด"""
     booking = _get_booking(booking_id)
     if isinstance(booking, str):
         return booking
-    summary = booking.summary()
-    lines = [f"📋 Booking Info: {booking_id}"]
-    for k, v in summary.items():
-        lines.append(f"  {k}: {v}")
-    return "\n".join(lines)
+    return f"📋 Booking Info:\n{booking.summary()}"
 
 
 @mcp.tool()
@@ -427,13 +402,11 @@ def create_order(booking_id: str) -> str:
     booking = _get_booking(booking_id)
     if isinstance(booking, str):
         return booking
-
     buf = io.StringIO()
     try:
         with redirect_stdout(buf):
             order = _system.create_order(booking)
-        # เก็บ order ไว้ใน registry
-        _order_registry[order.order_id] = order
+        _order_list.append(order)
         return buf.getvalue() + f"\n✅ order_id = {order.order_id}"
     except Exception as e:
         return f"❌ Error: {e}"
@@ -455,7 +428,6 @@ def pay_deposit(
     order = _get_order(order_id)
     if isinstance(order, str):
         return order
-
     buf = io.StringIO()
     try:
         with redirect_stdout(buf):
@@ -470,18 +442,11 @@ def pay_deposit(
 
 
 @mcp.tool()
-def pay_full(
-    user_id: str,
-    order_id: str,
-    promptpay_number: str
-) -> str:
-    """
-    ชำระเต็มจำนวนที่เหลือผ่าน PromptPay
-    """
+def pay_full(user_id: str, order_id: str, promptpay_number: str) -> str:
+    """ชำระเต็มจำนวนที่เหลือผ่าน PromptPay"""
     order = _get_order(order_id)
     if isinstance(order, str):
         return order
-
     buf = io.StringIO()
     try:
         with redirect_stdout(buf):
@@ -494,18 +459,11 @@ def pay_full(
 
 @mcp.tool()
 def get_order_info(order_id: str) -> str:
-    """
-    ดูข้อมูล Order
-    - แสดง status, deposit, ยอดรวม, Bookings ใน Order
-    """
+    """ดูข้อมูล Order"""
     order = _get_order(order_id)
     if isinstance(order, str):
         return order
-    summary = order.summary()
-    lines = [f"💳 Order Info: {order_id}"]
-    for k, v in summary.items():
-        lines.append(f"  {k}: {v}")
-    return "\n".join(lines)
+    return f"💳 Order Info:\n{order.summary()}"
 
 
 # ═══════════════════════════════════════════════
@@ -518,7 +476,11 @@ def approve_studio(admin_id: str, request_id: str) -> str:
     Admin อนุมัติ StudioRequest → สร้าง Studio ใหม่
     - ต้องมี request_id จาก request_studio ก่อน
     """
-    req = _request_registry.get(request_id)
+    req = None
+    for r in _request_list:
+        if r.request_id == request_id:
+            req = r
+            break
     if req is None:
         return f"❌ ไม่พบ StudioRequest {request_id}"
     return _capture(_system.admin_approve_studio, admin_id, req)
@@ -526,10 +488,12 @@ def approve_studio(admin_id: str, request_id: str) -> str:
 
 @mcp.tool()
 def reject_studio(admin_id: str, request_id: str) -> str:
-    """
-    Admin ปฏิเสธ StudioRequest
-    """
-    req = _request_registry.get(request_id)
+    """Admin ปฏิเสธ StudioRequest"""
+    req = None
+    for r in _request_list:
+        if r.request_id == request_id:
+            req = r
+            break
     if req is None:
         return f"❌ ไม่พบ StudioRequest {request_id}"
     return _capture(_system.admin_reject_studio, admin_id, req)
@@ -541,54 +505,42 @@ def reject_studio(admin_id: str, request_id: str) -> str:
 
 @mcp.tool()
 def report_bank() -> str:
-    """
-    รายงานยอดเงินใน SoonSak Bank
-    - แสดงยอดคงเหลือและ Transaction ทั้งหมด
-    """
+    """รายงานยอดเงินใน SoonSak Bank"""
     return _capture(_system.report_bank_balance)
 
 
 @mcp.tool()
 def report_artist_rating(artist_id: str) -> str:
-    """
-    รายงานคะแนนเฉลี่ยของ Artist
-    """
+    """รายงานคะแนนเฉลี่ยของ Artist"""
     return _capture(_system.report_artist_ratings, artist_id)
 
 
 @mcp.tool()
 def list_all_users() -> str:
-    """
-    ดูรายชื่อ User ทั้งหมดในระบบ
-    """
-    # ดึงค่าผ่าน Name Mangling เนื่องจากเป็น __user_list ใน Controller
-    users = getattr(_system, '_SoonSak__user_list', {})
+    """ดูรายชื่อ User ทั้งหมดในระบบ"""
+    users = _system._user_list
     if not users:
         return "ยังไม่มี User ในระบบ"
     lines = [f"👥 Users ทั้งหมด ({len(users)} คน):"]
-    for uid, u in users.items():
+    for u in users:
         utype = "VIP" if isinstance(u, VIPMember) else "User"
-        lines.append(f"  [{uid}] {u.name} | {utype} | status={u.status}")
+        lines.append(f"  [{u.user_id}] {u.name} | {utype} | status={u.status}")
     return "\n".join(lines)
 
 
 @mcp.tool()
 def list_all_artists() -> str:
-    """
-    ดูรายชื่อ Artist ทั้งหมดในระบบ
-    """
-    # ดึงค่าผ่าน Name Mangling เนื่องจากเป็น __artist_list ใน Controller
-    artists = getattr(_system, '_SoonSak__artist_list', {})
+    """ดูรายชื่อ Artist ทั้งหมดในระบบ"""
+    artists = _system._artist_list
     if not artists:
         return "ยังไม่มี Artist ในระบบ"
     lines = [f"🎨 Artists ทั้งหมด ({len(artists)} คน):"]
-    for aid, a in artists.items():
+    for a in artists:
         avg = a.average_rating()
-        lines.append(f"  [{aid}] {a.name} | status={a.status} | rating={avg:.1f}/5")
+        lines.append(f"  [{a.staff_id}] {a.name} | status={a.status} | rating={avg:.1f}/5")
     return "\n".join(lines)
 
 
 if __name__ == "__main__":
     print("🚀 SoonSak MCP Server กำลังเริ่มต้น...")
-    print(f"   Tools ที่พร้อมใช้งาน: พร้อมใช้งานแล้ว")
     mcp.run()

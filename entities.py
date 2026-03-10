@@ -1,5 +1,7 @@
 """
 entities.py — Entity classes หลักของระบบ SoonSak
+- ทุก attribute เป็น private (__attr)
+- ไม่ใช้ Dict เลย ใช้ list ทั้งหมด
 """
 
 from abc import ABC, abstractmethod
@@ -8,440 +10,430 @@ from typing import Optional
 
 
 class Mail:
-    """ข้อความในระบบ"""
-
     def __init__(self, sender_id: str, receiver_id: str, message: str):
-        self._sender_id = sender_id
-        self._receiver_id = receiver_id
-        self._message = message
-        self._sent_time = datetime.now()
+        self.__sender_id = sender_id
+        self.__receiver_id = receiver_id
+        self.__message = message
+        self.__sent_time = datetime.now()
 
     @property
-    def sender_id(self):
-        return self._sender_id
+    def sender_id(self): return self.__sender_id
 
     @property
-    def receiver_id(self):
-        return self._receiver_id
+    def receiver_id(self): return self.__receiver_id
 
     @property
-    def message(self):
-        return self._message
+    def message(self): return self.__message
 
     def __repr__(self):
-        return f"<Mail from={self._sender_id} to={self._receiver_id}>"
+        return f"<Mail from={self.__sender_id} to={self.__receiver_id}>"
 
 
-class Mailbox():
-    def __init__(self, user_id):
-        self._user_id = user_id
-        self._messages = []
+class Mailbox:
+    def __init__(self, user_id: str):
+        self.__user_id = user_id
+        self.__messages: list = []
 
     def receive_message(self, mail: Mail):
-        self._messages.append(mail)
+        self.__messages.append(mail)
 
-    def send_message(self, receiver_mailbox, message: str):
-        mail = Mail(self._user_id, receiver_mailbox._user_id, message)
+    def send_message(self, receiver_mailbox: "Mailbox", message: str):
+        mail = Mail(self.__user_id, receiver_mailbox.__user_id, message)
         receiver_mailbox.receive_message(mail)
 
-    def get_messages(self):
-        return list(self._messages)
+    def get_messages(self) -> list:
+        return list(self.__messages)
 
 
 class Coupon:
-    """คูปองส่วนลด — discount เป็น % (0-100)"""
-
     def __init__(self, coupon_code: str, discount: float, expired: date):
-        self._coupon_code = coupon_code
-        self._discount = discount
-        self._expired = expired
+        self.__coupon_code = coupon_code
+        self.__discount = discount
+        self.__expired = expired
 
     @property
-    def coupon_code(self):
-        return self._coupon_code
+    def coupon_code(self): return self.__coupon_code
 
     @property
-    def discount(self):
-        return self._discount
+    def discount(self): return self.__discount
 
     def is_valid(self) -> bool:
-        return date.today() <= self._expired
+        return date.today() <= self.__expired
 
     def __repr__(self):
-        return f"<Coupon code={self._coupon_code} discount={self._discount}% expires={self._expired}>"
+        return f"<Coupon code={self.__coupon_code} discount={self.__discount}% expires={self.__expired}>"
 
 
 class Rating:
-    """คะแนนรีวิวจาก User หลัง complete job — score 1-5"""
-
-    def __init__(self, rating_id: str, score: int, comment: str,
-                 user_id: str, artist_id: str):
+    def __init__(self, rating_id: str, score: int, comment: str, user_id: str, artist_id: str):
         if not (1 <= score <= 5):
             raise ValueError("Score ต้องอยู่ระหว่าง 1-5")
-        self._rating_id = rating_id
-        self._score = score
-        self._comment = comment
-        self._user_id = user_id
-        self._artist_id = artist_id
-        self._created_at = datetime.now()
+        self.__rating_id = rating_id
+        self.__score = score
+        self.__comment = comment
+        self.__user_id = user_id
+        self.__artist_id = artist_id
+        self.__created_at = datetime.now()
 
     @property
-    def rating_id(self):
-        return self._rating_id
+    def rating_id(self): return self.__rating_id
 
     @property
-    def score(self):
-        return self._score
+    def score(self): return self.__score
 
     @property
-    def artist_id(self):
-        return self._artist_id
+    def artist_id(self): return self.__artist_id
 
     def __repr__(self):
-        return f"<Rating id={self._rating_id} score={self._score}/5>"
+        return f"<Rating id={self.__rating_id} score={self.__score}/5>"
 
 
 class TattooStyle:
-    """สไตล์การสัก เช่น Minimalist, Japanese"""
-
     def __init__(self, style_id: str, name: str, description: str = ""):
-        self._style_id = style_id
-        self._name = name
-        self._description = description
+        self.__style_id = style_id
+        self.__name = name
+        self.__description = description
 
     @property
-    def name(self):
-        return self._name
+    def name(self): return self.__name
 
     def __repr__(self):
-        return f"<TattooStyle {self._name}>"
+        return f"<TattooStyle {self.__name}>"
 
 
 class Portfolio:
-    """Portfolio ของ Artist — Aggregation กับ TattooStyle"""
-
     def __init__(self, portfolio_id: str):
-        self._portfolio_id = portfolio_id
-        self._images: list[str] = []
-        self._styles: list[TattooStyle] = []
+        self.__portfolio_id = portfolio_id
+        self.__images: list = []
+        self.__styles: list = []
 
     def add_image(self, image_url: str):
         if not image_url:
             raise ValueError("image_url ต้องไม่ว่าง")
-        self._images.append(image_url)
+        self.__images.append(image_url)
 
     def remove_image(self, image_url: str):
-        if image_url not in self._images:
+        if image_url not in self.__images:
             raise ValueError("ไม่พบรูปภาพนี้ใน portfolio")
-        self._images.remove(image_url)
+        self.__images.remove(image_url)
 
     def add_style(self, style: TattooStyle):
-        self._styles.append(style)
+        self.__styles.append(style)
 
     @property
-    def images(self):
-        return list(self._images)
+    def images(self): return list(self.__images)
 
     @property
-    def styles(self):
-        return list(self._styles)
-
-    def __repr__(self):
-        return f"<Portfolio id={self._portfolio_id} images={len(self._images)}>"
+    def styles(self): return list(self.__styles)
 
 
 class Event:
-    """Event ใน Calendar เช่น นัดลูกค้า, วันหยุด"""
-
-    def __init__(self, event_id: str, event_name: str,
-                 event_date: date, start_time: str, end_time: str,
-                 description: str = ""):
-        self._event_id = event_id
-        self._event_name = event_name
-        self._date = event_date
-        self._start_time = start_time
-        self._end_time = end_time
-        self._description = description
-
-    def edit(self, event_name: str = None, description: str = None):
-        if event_name:
-            self._event_name = event_name
-        if description:
-            self._description = description
+    def __init__(self, event_id: str, event_name: str, event_date: date,
+                 start_time: str, end_time: str, description: str = ""):
+        self.__event_id = event_id
+        self.__event_name = event_name
+        self.__date = event_date
+        self.__start_time = start_time
+        self.__end_time = end_time
+        self.__description = description
 
     @property
-    def event_id(self):
-        return self._event_id
+    def date(self): return self.__date
 
     @property
-    def date(self):
-        return self._date
-
-    @property
-    def event_name(self):
-        return self._event_name
-
-    def __repr__(self):
-        return f"<Event {self._event_name} on {self._date}>"
+    def event_name(self): return self.__event_name
 
 
 class Calendar:
-    """ปฏิทินของ Artist — Composition กับ Event"""
-
     def __init__(self, owner_id: str):
-        self._owner_id = owner_id
-        self._events: list[Event] = []
+        self.__owner_id = owner_id
+        self.__events: list = []
 
     def add_event(self, event: Event):
-        self._events.append(event)
+        self.__events.append(event)
 
-    def view_monthly(self, year: int, month: int) -> list[Event]:
-        return [e for e in self._events
-                if e.date.year == year and e.date.month == month]
+    def view_monthly(self, year: int, month: int) -> list:
+        return [e for e in self.__events if e.date.year == year and e.date.month == month]
 
-    def view_daily(self, target_date: date) -> list[Event]:
-        return [e for e in self._events if e.date == target_date]
+    def view_daily(self, target_date: date) -> list:
+        return [e for e in self.__events if e.date == target_date]
 
-    def get_busy_dates(self) -> list[date]:
-        return [e.date for e in self._events]
+    def get_busy_dates(self) -> list:
+        return [e.date for e in self.__events]
 
     def __repr__(self):
-        return f"<Calendar owner={self._owner_id} events={len(self._events)}>"
+        return f"<Calendar owner={self.__owner_id} events={len(self.__events)}>"
 
 
 class StudioRequest:
-    """คำขอเปิด Studio จาก Artist — รอ Admin อนุมัติ
-    Status: PENDING → APPROVED / REJECTED
-    """
+    """Status: PENDING → APPROVED / REJECTED"""
 
     STATUS_PENDING  = "PENDING"
     STATUS_APPROVED = "APPROVED"
     STATUS_REJECTED = "REJECTED"
 
-    def __init__(self, request_id: str, artist_id: str,
-                 studio_name: str, location: str):
-        self._request_id = request_id
-        self._artist_id = artist_id
-        self._studio_name = studio_name
-        self._location = location
-        self._status = self.STATUS_PENDING
-        self._created_at = datetime.now()
+    def __init__(self, request_id: str, artist_id: str, studio_name: str, location: str):
+        self.__request_id = request_id
+        self.__artist_id = artist_id
+        self.__studio_name = studio_name
+        self.__location = location
+        self.__status = self.STATUS_PENDING
+        self.__created_at = datetime.now()
 
     def submit(self):
-        print(f"[StudioRequest] ส่งคำขอ {self._request_id} แล้ว รอ Admin อนุมัติ")
+        print(f"[StudioRequest] ส่งคำขอ {self.__request_id} แล้ว รอ Admin อนุมัติ")
 
     def approve(self):
-        if self._status != self.STATUS_PENDING:
+        if self.__status != self.STATUS_PENDING:
             raise Exception("อนุมัติได้เฉพาะ PENDING เท่านั้น")
-        self._status = self.STATUS_APPROVED
-        print(f"[StudioRequest] {self._request_id} ได้รับการอนุมัติแล้ว")
+        self.__status = self.STATUS_APPROVED
+        print(f"[StudioRequest] {self.__request_id} ได้รับการอนุมัติแล้ว")
 
     def reject(self):
-        if self._status != self.STATUS_PENDING:
+        if self.__status != self.STATUS_PENDING:
             raise Exception("ปฏิเสธได้เฉพาะ PENDING เท่านั้น")
-        self._status = self.STATUS_REJECTED
-        print(f"[StudioRequest] {self._request_id} ถูกปฏิเสธ")
+        self.__status = self.STATUS_REJECTED
+        print(f"[StudioRequest] {self.__request_id} ถูกปฏิเสธ")
 
     @property
-    def request_id(self):
-        return self._request_id
+    def request_id(self): return self.__request_id
 
     @property
-    def status(self):
-        return self._status
+    def status(self): return self.__status
 
     @property
-    def studio_name(self):
-        return self._studio_name
+    def studio_name(self): return self.__studio_name
 
     @property
-    def artist_id(self):
-        return self._artist_id
+    def artist_id(self): return self.__artist_id
+
+    @property
+    def location(self): return self.__location
 
     def __repr__(self):
-        return f"<StudioRequest id={self._request_id} studio={self._studio_name} status={self._status}>"
+        return f"<StudioRequest id={self.__request_id} studio={self.__studio_name} status={self.__status}>"
 
 
 class Studio:
-    """Studio ของ Artist
-    Status: OPEN / CLOSED
-    """
+    """Status: OPEN / CLOSED"""
 
     STATUS_OPEN   = "OPEN"
     STATUS_CLOSED = "CLOSED"
 
     def __init__(self, studio_id: str, name: str, location: str):
-        self._studio_id = studio_id
-        self._name = name
-        self._location = location
-        self._artist_list: list[str] = []
-        self._status = self.STATUS_CLOSED
+        self.__studio_id = studio_id
+        self.__name = name
+        self.__location = location
+        self.__artist_list: list = []
+        self.__status = self.STATUS_CLOSED
 
     def add_artist(self, artist_id: str):
-        if artist_id in self._artist_list:
+        if artist_id in self.__artist_list:
             raise ValueError(f"Artist {artist_id} อยู่ใน Studio นี้แล้ว")
-        self._artist_list.append(artist_id)
+        self.__artist_list.append(artist_id)
 
     def delete_artist(self, artist_id: str):
-        if artist_id not in self._artist_list:
+        if artist_id not in self.__artist_list:
             raise ValueError(f"ไม่พบ Artist {artist_id} ใน Studio นี้")
-        self._artist_list.remove(artist_id)
+        self.__artist_list.remove(artist_id)
 
     def open_studio(self):
-        self._status = self.STATUS_OPEN
-        print(f"[Studio] {self._name} เปิดแล้ว")
+        self.__status = self.STATUS_OPEN
+        print(f"[Studio] {self.__name} เปิดแล้ว")
 
     def close_studio(self):
-        self._status = self.STATUS_CLOSED
-        print(f"[Studio] {self._name} ปิดแล้ว")
+        self.__status = self.STATUS_CLOSED
+        print(f"[Studio] {self.__name} ปิดแล้ว")
 
     @property
-    def studio_id(self):
-        return self._studio_id
+    def studio_id(self): return self.__studio_id
 
     @property
-    def name(self):
-        return self._name
+    def name(self): return self.__name
 
     @property
-    def status(self):
-        return self._status
+    def status(self): return self.__status
 
     def __repr__(self):
-        return f"<Studio id={self._studio_id} name={self._name} status={self._status}>"
+        return f"<Studio id={self.__studio_id} name={self.__name} status={self.__status}>"
 
 
 class User:
-    """ผู้ใช้งานทั่วไป
-    Status: ACTIVE / SUSPENDED
-    จองพร้อมกันได้ max_bookings ครั้ง, จองล่วงหน้าได้ max_calendar วัน
-    """
+    """Status: ACTIVE / SUSPENDED"""
 
     STATUS_ACTIVE    = "ACTIVE"
     STATUS_SUSPENDED = "SUSPENDED"
 
-    def __init__(self, user_id: str, name: str, email: str, phone_number: str,password: str):
-        self._user_id = user_id
-        self._name = name
-        self._email = email
-        self._mailbox = Mailbox(user_id)
-        self._phone_number = phone_number
-        self._credit: float = 0.0
-        self._status = self.STATUS_ACTIVE
-        self._bookings_history: list = []
-        self._coupon_list: list[Coupon] = []
-        self._transaction_list: list = []
-        self._appointment_list: list = []
-        self._submitting: bool = False
-        self._completed_tattoo_count: int = 0
-        self._total_spent: float = 0.0  
-        self._max_calendar: int = 60
-        self._max_bookings: int = 3
-        self._password = password           
+    def __init__(self, user_id: str, name: str, email: str, phone_number: str, password: str):
+        self.__user_id = user_id
+        self.__name = name
+        self.__email = email
+        self.__mailbox = Mailbox(user_id)
+        self.__phone_number = phone_number
+        self.__credit: float = 0.0
+        self.__status = self.STATUS_ACTIVE
+        self.__bookings_history: list = []
+        self.__coupon_list: list = []
+        self.__transaction_list: list = []
+        self.__appointment_list: list = []
+        self.__submitting: bool = False
+        self.__completed_tattoo_count: int = 0
+        self.__total_spent: float = 0.0
+        self.__max_calendar: int = 60
+        self.__max_bookings: int = 3
+        self.__password = password
 
     def check_password(self, password: str) -> bool:
-        return self._password == password
+        return self.__password == password
+
+    # ── public properties ──
+    @property
+    def user_id(self): return self.__user_id
 
     @property
-    def user_id(self):
-        return self._user_id
+    def name(self): return self.__name
 
     @property
-    def name(self):
-        return self._name
+    def email(self): return self.__email
 
     @property
-    def email(self):
-        return self._email
+    def status(self): return self.__status
 
     @property
-    def status(self):
-        return self._status
+    def max_bookings(self): return self.__max_bookings
 
     @property
-    def max_bookings(self):
-        return self._max_bookings
+    def max_calendar(self): return self.__max_calendar
 
     @property
-    def max_calendar(self):
-        return self._max_calendar
+    def credit(self): return self.__credit
 
     @property
-    def credit(self):
-        return self._credit
+    def completed_tattoo_count(self): return self.__completed_tattoo_count
 
     @property
-    def completed_tattoo_count(self):
-        return self._completed_tattoo_count
+    def total_spent(self): return self.__total_spent
 
     @property
-    def total_spent(self):
-        return self._total_spent
-    
-    @property
-    def mailbox(self):
-        return self._mailbox
+    def mailbox(self): return self.__mailbox
 
+    # ── protected properties (สำหรับ subclass / controller เข้าถึง) ──
+    @property
+    def _user_id(self): return self.__user_id
+
+    @property
+    def _name(self): return self.__name
+
+    @_name.setter
+    def _name(self, v): self.__name = v
+
+    @property
+    def _email(self): return self.__email
+
+    @_email.setter
+    def _email(self, v): self.__email = v
+
+    @property
+    def _phone_number(self): return self.__phone_number
+
+    @property
+    def _password(self): return self.__password
+
+    @property
+    def _status(self): return self.__status
+
+    @_status.setter
+    def _status(self, v): self.__status = v
+
+    @property
+    def _total_spent(self): return self.__total_spent
+
+    @_total_spent.setter
+    def _total_spent(self, v): self.__total_spent = v
+
+    @property
+    def _completed_tattoo_count(self): return self.__completed_tattoo_count
+
+    @_completed_tattoo_count.setter
+    def _completed_tattoo_count(self, v): self.__completed_tattoo_count = v
+
+    @property
+    def _credit(self): return self.__credit
+
+    @_credit.setter
+    def _credit(self, v): self.__credit = v
+
+    @property
+    def _max_bookings(self): return self.__max_bookings
+
+    @_max_bookings.setter
+    def _max_bookings(self, v): self.__max_bookings = v
+
+    @property
+    def _max_calendar(self): return self.__max_calendar
+
+    @_max_calendar.setter
+    def _max_calendar(self, v): self.__max_calendar = v
+
+    @property
+    def _bookings_history(self): return self.__bookings_history
+
+    @property
+    def _coupon_list(self): return self.__coupon_list
+
+    # ── methods ──
     def add_spent(self, amount: float):
-        """เพิ่มยอดสะสม — เรียกหลัง pay_full สำเร็จ"""
         if amount > 0:
-            self._total_spent += amount
-            print(f"[User] {self._name} ยอดสะสม: {self._total_spent:.2f} บาท")
+            self.__total_spent += amount
+            print(f"[User] {self.__name} ยอดสะสม: {self.__total_spent:.2f} บาท")
 
     def add_credit(self, amount: float):
         if amount <= 0:
             raise ValueError("จำนวนเงินต้องมากกว่า 0")
-        self._credit += amount
+        self.__credit += amount
 
     def deduct_credit(self, amount: float):
-        if amount > self._credit:
+        if amount > self.__credit:
             raise ValueError("เครดิตไม่เพียงพอ")
-        self._credit -= amount
+        self.__credit -= amount
 
     def view_history(self) -> list:
-        return list(self._bookings_history)
+        return list(self.__bookings_history)
 
     def add_history(self, booking):
-        self._bookings_history.append(booking)
+        self.__bookings_history.append(booking)
 
     def calculate_discount(self, base_price: float) -> float:
-        """User ทั่วไปไม่มีส่วนลด — VIPMember จะ override"""
         return 0.0
 
     def add_coupon(self, coupon: Coupon):
-        self._coupon_list.append(coupon)
+        self.__coupon_list.append(coupon)
 
     def use_coupon(self, coupon_code: str, base_price: float) -> float:
-        """ใช้คูปอง คืนราคาหลังหักส่วนลด"""
-        for coupon in self._coupon_list:
+        for coupon in self.__coupon_list:
             if coupon.coupon_code == coupon_code:
                 if not coupon.is_valid():
                     raise ValueError("คูปองหมดอายุแล้ว")
                 discount_amount = base_price * (coupon.discount / 100)
-                self._coupon_list.remove(coupon)
+                self.__coupon_list.remove(coupon)
                 print(f"[User] ใช้คูปอง {coupon_code} ลด {coupon.discount}%")
                 return base_price - discount_amount
         raise ValueError(f"ไม่พบคูปอง {coupon_code}")
 
     def submit(self):
-        self._submitting = True
-        print(f"[User] {self._name} ยืนยันการจองแล้ว")
+        self.__submitting = True
+        print(f"[User] {self.__name} ยืนยันการจองแล้ว")
 
     def suspend(self):
-        self._status = self.STATUS_SUSPENDED
-        print(f"[User] บัญชี {self._name} ถูกระงับ")
+        self.__status = self.STATUS_SUSPENDED
+        print(f"[User] บัญชี {self.__name} ถูกระงับ")
 
     def __repr__(self):
-        return f"<User id={self._user_id} name={self._name} status={self._status}>"
+        return f"<User id={self.__user_id} name={self.__name} status={self.__status}>"
 
 
 class VIPMember(User):
-    """สมาชิก VIP — Inheritance: User → VIPMember
-    rank อัปเกรดอัตโนมัติตามยอดสะสม (_total_spent):
-      SILVER   ≥  5,000 บาท (ส่วนลด 5%)
-      GOLD     ≥ 15,000 บาท (ส่วนลด 10%)
-      PLATINUM ≥ 30,000 บาท (ส่วนลด 15%)
-    """
+    """Inheritance: User → VIPMember"""
 
     RANK_SILVER   = "SILVER"
     RANK_GOLD     = "GOLD"
@@ -456,23 +448,22 @@ class VIPMember(User):
     DISCOUNT_PLATINUM = 15
 
     def __init__(self, user_id: str, name: str, email: str,
-                 phone_number: str,password, rank: str = "SILVER"):
+                 phone_number: str, password: str, rank: str = "SILVER"):
         super().__init__(user_id, name, email, phone_number, password)
-        self._phone_number = phone_number 
-        self._rank = rank
-        self._max_bookings = 6    # VIP จองได้มากกว่า
+        self.__rank = rank
+        self._max_bookings = 6
         self._max_calendar = 120
 
     @property
-    def mailbox(self):
-        return self._mailbox
+    def rank(self): return self.__rank
 
     @property
-    def rank(self):
-        return self._rank
+    def _rank(self): return self.__rank
+
+    @_rank.setter
+    def _rank(self, v): self.__rank = v
 
     def check_and_upgrade(self):
-        """เช็คยอดสะสมและ upgrade rank อัตโนมัติ"""
         spent = self._total_spent
         if spent >= self.THRESHOLD_PLATINUM:
             new_rank = self.RANK_PLATINUM
@@ -481,164 +472,151 @@ class VIPMember(User):
         elif spent >= self.THRESHOLD_SILVER:
             new_rank = self.RANK_SILVER
         else:
-            new_rank = self._rank
-
-        if new_rank != self._rank:
-            old_rank = self._rank
-            self._rank = new_rank
+            new_rank = self.__rank
+        if new_rank != self.__rank:
+            old_rank = self.__rank
+            self.__rank = new_rank
             print(f"[VIPMember] {self._name} อัปเกรด rank: {old_rank} → {new_rank} "
                   f"(ยอดสะสม {spent:,.2f} บาท)")
 
     def calculate_discount(self, base_price: float) -> float:
-        """Override: คำนวณส่วนลดตาม rank (Polymorphism)"""
-        if self._rank == self.RANK_PLATINUM:
+        if self.__rank == self.RANK_PLATINUM:
             rate = self.DISCOUNT_PLATINUM
-        elif self._rank == self.RANK_GOLD:
+        elif self.__rank == self.RANK_GOLD:
             rate = self.DISCOUNT_GOLD
         else:
             rate = self.DISCOUNT_SILVER
         discount = base_price * (rate / 100)
-        print(f"[VIP] rank={self._rank} ส่วนลด {rate}% = {discount:.2f} บาท")
+        print(f"[VIP] rank={self.__rank} ส่วนลด {rate}% = {discount:.2f} บาท")
         return discount
 
     def upgrade_rank(self, new_rank: str):
-        """Admin สั่ง upgrade rank แบบ manual"""
         if new_rank not in (self.RANK_SILVER, self.RANK_GOLD, self.RANK_PLATINUM):
             raise ValueError(f"Rank ไม่ถูกต้อง: {new_rank}")
-        old = self._rank
-        self._rank = new_rank
+        old = self.__rank
+        self.__rank = new_rank
         print(f"[VIPMember] Admin อัปเกรด rank: {old} → {new_rank}")
 
-    def _get_discount_rate(self) -> int:
-        if self._rank == self.RANK_PLATINUM:
+    def __get_discount_rate(self) -> int:
+        if self.__rank == self.RANK_PLATINUM:
             return self.DISCOUNT_PLATINUM
-        elif self._rank == self.RANK_GOLD:
+        elif self.__rank == self.RANK_GOLD:
             return self.DISCOUNT_GOLD
         return self.DISCOUNT_SILVER
 
     def vip_status_summary(self) -> str:
         spent = self._total_spent
-        rate  = self._get_discount_rate()
-        if self._rank == self.RANK_SILVER:
+        rate  = self.__get_discount_rate()
+        if self.__rank == self.RANK_SILVER:
             next_info = f" | อีก {self.THRESHOLD_GOLD - spent:,.0f} บาท → GOLD"
-        elif self._rank == self.RANK_GOLD:
+        elif self.__rank == self.RANK_GOLD:
             next_info = f" | อีก {self.THRESHOLD_PLATINUM - spent:,.0f} บาท → PLATINUM"
         else:
             next_info = " | ระดับสูงสุดแล้ว"
-        return f"rank={self._rank} | ยอดสะสม {spent:,.2f} บาท | ส่วนลด {rate}%{next_info}"
+        return f"rank={self.__rank} | ยอดสะสม {spent:,.2f} บาท | ส่วนลด {rate}%{next_info}"
 
     def __repr__(self):
         return (f"<VIPMember id={self._user_id} name={self._name} "
-                f"rank={self._rank} spent={self._total_spent:,.2f}>")
-    
-class Staff(User,ABC):
-    """
-    คลาสนามธรรม (Abstract) สำหรับพนักงานในระบบ
-    ทั้ง Artist และ Admin ต้อง inherit จากคลาสนี้
-    """
+                f"rank={self.__rank} spent={self._total_spent:,.2f}>")
+
+
+class Staff(User, ABC):
+    """Abstract สำหรับพนักงาน — Artist และ Admin ต้อง inherit"""
 
     def __init__(self, staff_id: str, name: str, email: str, password: str):
         super().__init__(staff_id, name, email, "", password)
-        self._mailbox = Mailbox(staff_id)
-
-    # Getter & Setter
-    @property
-    def staff_id(self):
-        return self._user_id
+        self.__staff_mailbox = Mailbox(staff_id)
 
     @property
-    def name(self):
-        return self.__name
+    def staff_id(self): return self._user_id
+
+    @property
+    def name(self): return self._name
 
     @name.setter
-    def name(self, value):
-        self.__name = value
+    def name(self, value): self._name = value
 
     @property
-    def email(self):
-        return self.__email
+    def email(self): return self._email
 
     @email.setter
-    def email(self, value):
-        self.__email = value
+    def email(self, value): self._email = value
 
     @property
-    def mailbox(self):
-        return self._mailbox
+    def mailbox(self): return self.__staff_mailbox
+
+    @property
+    def _mailbox(self): return self.__staff_mailbox
 
     @abstractmethod
-    def view_schedule(self):
-        pass
+    def view_schedule(self): pass
 
     @abstractmethod
-    def update_profile(self, **kwargs):
-        pass
+    def update_profile(self, **kwargs): pass
 
     def __repr__(self):
-        return f"<{self.__class__.__name__} id={self.__staff_id} name={self.__name}>"
+        return f"<{self.__class__.__name__} id={self._user_id} name={self._name}>"
 
 
 class Artist(Staff):
-    """ช่างสักในระบบ — Inheritance: Staff → Artist
-    Status: PENDING → VERIFIED → SUSPENDED
-    """
+    """Status: PENDING → VERIFIED → SUSPENDED"""
 
     STATUS_PENDING   = "PENDING"
     STATUS_VERIFIED  = "VERIFIED"
     STATUS_SUSPENDED = "SUSPENDED"
 
-    def __init__(self, staff_id, name, email, password: str, experience=0):
+    def __init__(self, staff_id: str, name: str, email: str, password: str, experience: int = 0):
         super().__init__(staff_id, name, email, password)
-        self._mailbox
-        self._experience = experience
-        self._deposit_policy = None
-        self._portfolio: Optional[Portfolio] = None
-        self._available_day_list: list[date] = []
-        self._request_list: list[StudioRequest] = []
-        self._booking_list: list = []
-        self._appointment_list: list = []
-        self._submitting: bool = False
-        self._status = self.STATUS_PENDING
-        self._calendar: Optional[Calendar] = None
-        self._ratings: list[Rating] = []
+        self.__experience = experience
+        self.__deposit_policy = None
+        self.__portfolio: Optional[Portfolio] = None
+        self.__available_day_list: list = []
+        self.__request_list: list = []
+        self.__booking_list: list = []
+        self.__appointment_list: list = []
+        self.__submitting: bool = False
+        self.__status = self.STATUS_PENDING
+        self.__calendar: Optional[Calendar] = None
+        self.__ratings: list = []
 
     @property
-    def staff_id(self):
-        return self.__user_id
+    def staff_id(self): return self._user_id
 
     @property
-    def mailbox(self):
-        return self._mailbox
+    def status(self): return self.__status
 
     @property
-    def status(self):
-        return self._status
+    def deposit_policy(self): return self.__deposit_policy
 
     @property
-    def deposit_policy(self):
-        return self._deposit_policy
+    def calendar(self): return self.__calendar
 
     @property
-    def calendar(self):
-        return self._calendar
+    def _experience(self): return self.__experience
+
+    @property
+    def _status(self): return self.__status
+
+    @_status.setter
+    def _status(self, v): self.__status = v
 
     def verify_identity(self):
-        self._status = self.STATUS_VERIFIED
+        self.__status = self.STATUS_VERIFIED
         print(f"[Artist] {self._name} ยืนยันตัวตนแล้ว")
 
-    def set_calendar(self):
-        self._calendar = Calendar(owner_id=self._user_id)
-        return self._calendar
+    def set_calendar(self) -> Calendar:
+        self.__calendar = Calendar(owner_id=self._user_id)
+        return self.__calendar
 
     def set_deposit_policy(self, policy):
-        self._deposit_policy = policy
+        self.__deposit_policy = policy
         print(f"[Artist] {self._name} ตั้ง deposit policy แล้ว: {policy}")
 
     def accept_job(self, booking) -> bool:
-        if self._status != self.STATUS_VERIFIED:
+        if self.__status != self.STATUS_VERIFIED:
             raise Exception("Artist ต้องผ่านการยืนยันตัวตนก่อน")
         booking.accept()
-        self._booking_list.append(booking)
+        self.__booking_list.append(booking)
         print(f"[Artist] {self._name} รับงาน {booking.booking_id}")
         return True
 
@@ -651,52 +629,47 @@ class Artist(Staff):
         print(f"[Artist] {self._name} เสร็จงาน {booking.booking_id}")
 
     def manage_time(self, event: Event):
-        if self._calendar is None:
+        if self.__calendar is None:
             self.set_calendar()
-        self._calendar.add_event(event)
+        self.__calendar.add_event(event)
 
     def request_studio(self, request: StudioRequest):
-        self._request_list.append(request)
+        self.__request_list.append(request)
         request.submit()
 
     def add_rating(self, rating: Rating):
-        self._ratings.append(rating)
+        self.__ratings.append(rating)
 
     def average_rating(self) -> float:
-        if not self._ratings:
+        if not self.__ratings:
             return 0.0
-        return sum(r.score for r in self._ratings) / len(self._ratings)
+        return sum(r.score for r in self.__ratings) / len(self.__ratings)
 
     def view_schedule(self):
-        if self._calendar is None:
+        if self.__calendar is None:
             return []
-        return self._calendar.view_monthly(datetime.now().year, datetime.now().month)
+        return self.__calendar.view_monthly(datetime.now().year, datetime.now().month)
 
     def update_profile(self, **kwargs):
         if "name" in kwargs:
             self._name = kwargs["name"]
         if "experience" in kwargs:
-            self._experience = kwargs["experience"]
+            self.__experience = kwargs["experience"]
         print(f"[Artist] อัปเดต profile แล้ว")
 
     def __repr__(self):
-        return f"<Artist id={self._user_id} name={self._name} status={self._status}>"
+        return f"<Artist id={self._user_id} name={self._name} status={self.__status}>"
 
 
 class Admin(Staff):
     """ผู้ดูแลระบบ — Inheritance: Staff → Admin"""
 
-    def __init__(self, staff_id, name, email, password: str):
+    def __init__(self, staff_id: str, name: str, email: str, password: str):
         super().__init__(staff_id, name, email, password)
-        self._requests: list[StudioRequest] = []
-        
-    @property
-    def staff_id(self):
-        return self.__user_id
+        self.__requests: list = []
 
     @property
-    def mailbox(self):
-        return self._mailbox
+    def staff_id(self): return self._user_id
 
     def approve_artist(self, artist: Artist):
         artist.verify_identity()
@@ -711,7 +684,7 @@ class Admin(Staff):
         new_studio = Studio(
             studio_id=f"STU-{len(studio_list)+1:03d}",
             name=request.studio_name,
-            location=""
+            location=request.location
         )
         new_studio.open_studio()
         studio_list.append(new_studio)
