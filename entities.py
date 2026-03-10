@@ -11,53 +11,6 @@ from datetime import datetime, date
 from typing import Optional
 
 
-# ─────────────────────────────────────────────
-# Abstract Base: Staff
-# ─────────────────────────────────────────────
-
-class Staff(ABC):
-    """
-    คลาสนามธรรม (Abstract) สำหรับพนักงานในระบบ
-    ทั้ง Artist และ Admin ต้อง inherit จากคลาสนี้
-    """
-
-    def __init__(self, staff_id: str, name: str, email: str):
-        self.__staff_id = staff_id  # strictly private
-        self.__name = name
-        self.__email = email
-
-    # Getter & Setter
-    @property
-    def staff_id(self):
-        return self.__staff_id
-
-    @property
-    def name(self):
-        return self.__name
-
-    @name.setter
-    def name(self, value):
-        self.__name = value
-
-    @property
-    def email(self):
-        return self.__email
-
-    @email.setter
-    def email(self, value):
-        self.__email = value
-
-    @abstractmethod
-    def view_schedule(self):
-        pass
-
-    @abstractmethod
-    def update_profile(self, **kwargs):
-        pass
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} id={self.__staff_id} name={self.__name}>"
-
 
 # ─────────────────────────────────────────────
 # Coupon
@@ -528,6 +481,51 @@ class VIPMember(User):
     def __repr__(self):
         return (f"<VIPMember id={self.user_id} name={self.name} "
                 f"rank={self.__rank} spent={self.total_spent:,.2f}>")
+    
+# ─────────────────────────────────────────────
+# Abstract Base: Staff
+# ─────────────────────────────────────────────
+
+class Staff(User,ABC):
+    """
+    คลาสนามธรรม (Abstract) สำหรับพนักงานในระบบ
+    ทั้ง Artist และ Admin ต้อง inherit จากคลาสนี้
+    """
+
+    def __init__(self, staff_id: str, name: str, email: str):
+        super().__init__(staff_id,name,email)
+
+    # Getter & Setter
+    @property
+    def staff_id(self):
+        return self.__staff_id
+
+    @property
+    def name(self):
+        return self.__name
+
+    @name.setter
+    def name(self, value):
+        self.__name = value
+
+    @property
+    def email(self):
+        return self.__email
+
+    @email.setter
+    def email(self, value):
+        self.__email = value
+
+    @abstractmethod
+    def view_schedule(self):
+        pass
+
+    @abstractmethod
+    def update_profile(self, **kwargs):
+        pass
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} id={self.__staff_id} name={self.__name}>"
 
 
 # ─────────────────────────────────────────────
@@ -575,13 +573,13 @@ class Artist(Staff):
         print(f"[Artist] {self.name} ยืนยันตัวตนแล้ว")
 
     def set_calendar(self):
-        self.__calendar = Calendar(owner_id=self.staff_id)
+        self.__calendar = Calendar(owner_id=self.__staff_id)
         print(f"[Artist] {self.name} ตั้ง Calendar แล้ว")
         return self.__calendar
 
     def set_deposit_policy(self, policy):
         self.__deposit_policy = policy
-        print(f"[Artist] {self.name} ตั้ง deposit policy แล้ว: {policy}")
+        print(f"[Artist] {self.__name} deposit policy แล้ว: {policy}")
 
     def accept_job(self, booking) -> bool:
         if self.__status != self.STATUS_VERIFIED:
@@ -687,3 +685,6 @@ class Admin(Staff):
 
     def __repr__(self):
         return f"<Admin id={self.staff_id} name={self.name}>"
+    
+
+    
