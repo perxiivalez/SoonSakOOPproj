@@ -561,7 +561,8 @@ def list_all_users() -> str:
     """
     ดูรายชื่อ User ทั้งหมดในระบบ
     """
-    users = _system._user_list
+    # ดึงค่าผ่าน Name Mangling เนื่องจากเป็น __user_list ใน Controller
+    users = getattr(_system, '_SoonSak__user_list', {})
     if not users:
         return "ยังไม่มี User ในระบบ"
     lines = [f"👥 Users ทั้งหมด ({len(users)} คน):"]
@@ -576,7 +577,8 @@ def list_all_artists() -> str:
     """
     ดูรายชื่อ Artist ทั้งหมดในระบบ
     """
-    artists = _system._artist_list
+    # ดึงค่าผ่าน Name Mangling เนื่องจากเป็น __artist_list ใน Controller
+    artists = getattr(_system, '_SoonSak__artist_list', {})
     if not artists:
         return "ยังไม่มี Artist ในระบบ"
     lines = [f"🎨 Artists ทั้งหมด ({len(artists)} คน):"]
@@ -593,19 +595,7 @@ def list_all_artists() -> str:
 @mcp.tool()
 def run_full_demo() -> str:
     """
-    รัน Demo สมบูรณ์ทั้งระบบ ครอบคลุมทุก Flow:
-    1. Register User, VIP, Artist, Admin
-    2. Login ทุกคน
-    3. Admin อนุมัติ Artist
-    4. Artist ตั้ง Deposit Policy
-    5. สร้าง Booking (User + VIP)
-    6. Artist รับงาน
-    7. ชำระมัดจำ (Percent + Fixed)
-    8. คำนวณส่วนลด VIP
-    9. งานเสร็จ + Rate Artist
-    10. Admin เพิ่ม Coupon
-    11. Request + Approve Studio
-    12. Report ทั้งหมด
+    รัน Demo สมบูรณ์ทั้งระบบ ครอบคลุมทุก Flow
     """
     global _system, _booking_registry, _order_registry, _request_registry
 
@@ -731,8 +721,9 @@ def _get_booking(booking_id: str):
     # ค้นใน registry ก่อน
     if booking_id in _booking_registry:
         return _booking_registry[booking_id]
-    # ค้นใน user history ทุกคน
-    for user in _system._user_list.values():
+    # ค้นใน user history ทุกคนโดยใช้ Name Mangling ดึงจาก controller
+    users = getattr(_system, '_SoonSak__user_list', {})
+    for user in users.values():
         for b in user.view_history():
             if hasattr(b, "booking_id") and b.booking_id == booking_id:
                 _booking_registry[booking_id] = b
