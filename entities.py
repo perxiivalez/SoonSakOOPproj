@@ -7,6 +7,47 @@ from datetime import datetime, date
 from typing import Optional
 
 
+class Mail:
+    """ข้อความในระบบ"""
+
+    def __init__(self, sender_id: str, receiver_id: str, message: str):
+        self._sender_id = sender_id
+        self._receiver_id = receiver_id
+        self._message = message
+        self._sent_time = datetime.now()
+
+    @property
+    def sender_id(self):
+        return self._sender_id
+
+    @property
+    def receiver_id(self):
+        return self._receiver_id
+
+    @property
+    def message(self):
+        return self._message
+
+    def __repr__(self):
+        return f"<Mail from={self._sender_id} to={self._receiver_id}>"
+
+
+class Mailbox():
+    def __init__(self,user_id):
+        self.__user_id = user_id
+        self.__messages = []
+
+    def receive_message(self, mail: Mail):
+        self._messages.append(mail)
+
+    def send_message(self, receiver_mailbox, message: str):
+        mail = Mail(self._user_id, receiver_mailbox._user_id, message)
+        receiver_mailbox.receive_message(mail)
+
+    def get_messages(self):
+        return list(self._messages)
+
+
 class Coupon:
     """คูปองส่วนลด — discount เป็น % (0-100)"""
 
@@ -279,10 +320,11 @@ class User:
     STATUS_ACTIVE    = "ACTIVE"
     STATUS_SUSPENDED = "SUSPENDED"
 
-    def __init__(self, user_id: str, name: str, email: str, phone_number: str):
+    def __init__(self, user_id: str, name: str, email: str, phone_number: str,password: str):
         self._user_id = user_id
         self._name = name
         self._email = email
+        self._mailbox = Mailbox(user_id)
         self._phone_number = phone_number
         self._credit: float = 0.0
         self._status = self.STATUS_ACTIVE
@@ -292,9 +334,13 @@ class User:
         self._appointment_list: list = []
         self._submitting: bool = False
         self._completed_tattoo_count: int = 0
-        self._total_spent: float = 0.0  # ยอดสะสมจาก full payment
+        self._total_spent: float = 0.0  
         self._max_calendar: int = 60
         self._max_bookings: int = 3
+        self._password = password           
+
+    def check_password(self, password: str) -> bool:
+        return self._password == password
 
     @property
     def user_id(self):
@@ -331,6 +377,10 @@ class User:
     @property
     def total_spent(self):
         return self._total_spent
+    
+    @property
+    def mailbox(self):
+        return self._mailbox
 
     def add_spent(self, amount: float):
         """เพิ่มยอดสะสม — เรียกหลัง pay_full สำเร็จ"""
@@ -406,11 +456,16 @@ class VIPMember(User):
     DISCOUNT_PLATINUM = 15
 
     def __init__(self, user_id: str, name: str, email: str,
-                 phone_number: str, rank: str = "SILVER"):
-        super().__init__(user_id, name, email, phone_number)
+                 phone_number: str,password, rank: str = "SILVER"):
+        super().__init__(user_id, name, email, phone_number, password)
+        self._phone_number = phone_number 
         self._rank = rank
         self._max_bookings = 6    # VIP จองได้มากกว่า
         self._max_calendar = 120
+
+    @property
+    def mailbox(self):
+        return self._mailbox
 
     @property
     def rank(self):
@@ -431,7 +486,7 @@ class VIPMember(User):
         if new_rank != self._rank:
             old_rank = self._rank
             self._rank = new_rank
-            print(f"[VIPMember] 🎉 {self._name} อัปเกรด rank: {old_rank} → {new_rank} "
+            print(f"[VIPMember] {self._name} อัปเกรด rank: {old_rank} → {new_rank} "
                   f"(ยอดสะสม {spent:,.2f} บาท)")
 
     def calculate_discount(self, base_price: float) -> float:
@@ -483,12 +538,13 @@ class Staff(User,ABC):
     """
 
     def __init__(self, staff_id: str, name: str, email: str):
-        super().__init__(staff_id,name,email)
+        super().__init__(staff_id, name, email, "", "")
+        self._mailbox = Mailbox(staff_id)
 
     # Getter & Setter
     @property
     def staff_id(self):
-        return self.__staff_id
+        return self.__user_id
 
     @property
     def name(self):
@@ -505,6 +561,10 @@ class Staff(User,ABC):
     @email.setter
     def email(self, value):
         self.__email = value
+
+    @property
+    def mailbox(self):
+        return self._mailbox
 
     @abstractmethod
     def view_schedule(self):
@@ -529,6 +589,7 @@ class Artist(Staff):
 
     def __init__(self, staff_id: str, name: str, email: str, experience: int = 0):
         super().__init__(staff_id, name, email)
+        self._mailbox
         self._experience = experience
         self._deposit_policy = None
         self._portfolio: Optional[Portfolio] = None
@@ -540,6 +601,14 @@ class Artist(Staff):
         self._status = self.STATUS_PENDING
         self._calendar: Optional[Calendar] = None
         self._ratings: list[Rating] = []
+
+    @property
+    def staff_id(self):
+        return self.__user_id
+
+    @property
+    def mailbox(self):
+        return self._mailbox
 
     @property
     def status(self):
@@ -558,7 +627,7 @@ class Artist(Staff):
         print(f"[Artist] {self._name} ยืนยันตัวตนแล้ว")
 
     def set_calendar(self):
-        self._calendar = Calendar(owner_id=self._staff_id)
+        self._calendar = Calendar(owner_id=self._user_id)
         return self._calendar
 
     def set_deposit_policy(self, policy):
@@ -611,7 +680,7 @@ class Artist(Staff):
         print(f"[Artist] อัปเดต profile แล้ว")
 
     def __repr__(self):
-        return f"<Artist id={self._staff_id} name={self._name} status={self._status}>"
+        return f"<Artist id={self._user_id} name={self._name} status={self._status}>"
 
 
 class Admin(Staff):
@@ -619,7 +688,16 @@ class Admin(Staff):
 
     def __init__(self, staff_id: str, name: str, email: str):
         super().__init__(staff_id, name, email)
+        self.__mailbox
         self._requests: list[StudioRequest] = []
+
+    @property
+    def staff_id(self):
+        return self.__user_id
+
+    @property
+    def mailbox(self):
+        return self._mailbox
 
     def approve_artist(self, artist: Artist):
         artist.verify_identity()
@@ -659,4 +737,4 @@ class Admin(Staff):
         print(f"[Admin] อัปเดต profile แล้ว")
 
     def __repr__(self):
-        return f"<Admin id={self._staff_id} name={self._name}>"
+        return f"<Admin id={self._user_id} name={self._name}>"

@@ -61,10 +61,13 @@ class SoonSak:
 
     # ── Authentication ──
 
-    def login(self, user_id: str) -> bool:
+    def login(self, user_id: str, password: str) -> bool:          # ← เพิ่ม password
         entity = self.find_user(user_id) or self.find_artist(user_id) or self._find_admin(user_id)
         if entity is None:
             print(f"[Login] ไม่พบ ID: {user_id}")
+            return False
+        if not entity.check_password(password):                    # ← เช็ค password
+            print(f"[Login] รหัสผ่านไม่ถูกต้อง")
             return False
         if isinstance(entity, User) and entity.status == User.STATUS_SUSPENDED:
             print(f"[Login] บัญชี {user_id} ถูกระงับ")
@@ -113,25 +116,28 @@ class SoonSak:
 
     # ── Register ──
 
-    def register_user(self, user_id: str, name: str, email: str, phone: str,
-                      is_vip: bool = False, vip_rank: str = "SILVER") -> User:
+    def register_user(self, user_id: str, name: str, email: str,
+                    phone: str, password: str) -> User:
         if self.find_user(user_id) is not None:
             raise ValueError(f"User {user_id} มีอยู่แล้ว")
-        user = VIPMember(user_id, name, email, phone, vip_rank) if is_vip else User(user_id, name, email, phone)
+        user = User(user_id, name, email, phone, password)
         self._user_list.append(user)
         print(f"[Register] ลงทะเบียน {user} สำเร็จ")
         return user
-
-    def register_artist(self, staff_id: str, name: str, email: str, experience: int = 0) -> Artist:
+        
+    def register_artist(self, staff_id: str, name: str, email: str,
+                        password: str,                              # ← เพิ่ม password
+                        experience: int = 0) -> Artist:
         if self.find_artist(staff_id) is not None:
             raise ValueError(f"Artist {staff_id} มีอยู่แล้ว")
-        artist = Artist(staff_id, name, email, experience)
+        artist = Artist(staff_id, name, email, password, experience)
         self._artist_list.append(artist)
         print(f"[Register] ลงทะเบียน {artist} สำเร็จ รอ Admin อนุมัติ")
         return artist
 
-    def register_admin(self, staff_id: str, name: str, email: str) -> Admin:
-        admin = Admin(staff_id, name, email)
+    def register_admin(self, staff_id: str, name: str, email: str,
+                       password: str) -> Admin:                     # ← เพิ่ม password
+        admin = Admin(staff_id, name, email, password)
         self._admin_list.append(admin)
         print(f"[Register] สร้าง Admin {admin} สำเร็จ")
         return admin
@@ -233,7 +239,7 @@ class SoonSak:
         spent = user._total_spent
         if not isinstance(user, VIPMember):
             if spent >= VIPMember.THRESHOLD_SILVER:
-                vip = VIPMember(user.user_id, user.name, user.email, user._phone_number)
+                vip = VIPMember(user.user_id, user.name, user.email, user._phone_number, user._password)
                 vip._bookings_history       = user._bookings_history
                 vip._coupon_list            = user._coupon_list
                 vip._credit                 = user._credit
