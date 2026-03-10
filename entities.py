@@ -33,9 +33,9 @@ class Mail:
 
 
 class Mailbox():
-    def __init__(self,user_id):
-        self.__user_id = user_id
-        self.__messages = []
+    def __init__(self, user_id):
+        self._user_id = user_id
+        self._messages = []
 
     def receive_message(self, mail: Mail):
         self._messages.append(mail)
@@ -537,14 +537,14 @@ class Staff(User,ABC):
     ทั้ง Artist และ Admin ต้อง inherit จากคลาสนี้
     """
 
-    def __init__(self, staff_id: str, name: str, email: str):
-        super().__init__(staff_id, name, email, "", "")
+    def __init__(self, staff_id: str, name: str, email: str, password: str):
+        super().__init__(staff_id, name, email, "", password)
         self._mailbox = Mailbox(staff_id)
 
     # Getter & Setter
     @property
     def staff_id(self):
-        return self.__user_id
+        return self._user_id
 
     @property
     def name(self):
@@ -587,8 +587,8 @@ class Artist(Staff):
     STATUS_VERIFIED  = "VERIFIED"
     STATUS_SUSPENDED = "SUSPENDED"
 
-    def __init__(self, staff_id: str, name: str, email: str, experience: int = 0):
-        super().__init__(staff_id, name, email)
+    def __init__(self, staff_id, name, email, password: str, experience=0):
+        super().__init__(staff_id, name, email, password)
         self._mailbox
         self._experience = experience
         self._deposit_policy = None
@@ -686,11 +686,10 @@ class Artist(Staff):
 class Admin(Staff):
     """ผู้ดูแลระบบ — Inheritance: Staff → Admin"""
 
-    def __init__(self, staff_id: str, name: str, email: str):
-        super().__init__(staff_id, name, email)
-        self.__mailbox
+    def __init__(self, staff_id, name, email, password: str):
+        super().__init__(staff_id, name, email, password)
         self._requests: list[StudioRequest] = []
-
+        
     @property
     def staff_id(self):
         return self.__user_id
