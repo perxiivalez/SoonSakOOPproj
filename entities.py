@@ -1,9 +1,3 @@
-"""
-entities.py — Entity classes หลักของระบบ SoonSak
-- ทุก attribute เป็น private (__attr)
-- ไม่ใช้ Dict เลย ใช้ list ทั้งหมด
-"""
-
 from abc import ABC, abstractmethod
 from datetime import datetime, date
 from typing import Optional
@@ -67,7 +61,7 @@ class Coupon:
 class Rating:
     def __init__(self, rating_id: str, score: int, comment: str, user_id: str, artist_id: str):
         if not (1 <= score <= 5):
-            raise ValueError("Score ต้องอยู่ระหว่าง 1-5")
+            raise ValueError("Score must be between 1-5")
         self.__rating_id = rating_id
         self.__score = score
         self.__comment = comment
@@ -89,16 +83,6 @@ class Rating:
 
 
 class TattooStyle:
-    """
-    คลาสสำหรับเก็บข้อมูลสไตล์รอยสัก
-    
-    Attributes:
-        style_id: รหัสเฉพาะของสไตล์
-        name: ชื่อสไตล์ (เช่น Traditional, Realism, Watercolor)
-        description: คำอธิบายสไตล์
-    """
-    
-    # Class variable: Popular tattoo styles
     POPULAR_STYLES = [
         "Traditional", "Realism", "Watercolor", "Japanese",
         "Tribal", "Geometric", "Blackwork", "New School",
@@ -106,78 +90,46 @@ class TattooStyle:
     ]
     
     def __init__(self, style_id: str, name: str, description: str = ""):
-        """
-        สร้าง TattooStyle object
-        
-        Args:
-            style_id: รหัสสไตล์ (ต้องไม่ว่าง)
-            name: ชื่อสไตล์ (ต้องไม่ว่าง)
-            description: คำอธิบายสไตล์ (optional)
-            
-        Raises:
-            ValueError: ถ้า style_id หรือ name ว่าง
-        """
         if not style_id or not style_id.strip():
-            raise ValueError("style_id ต้องไม่ว่าง")
+            raise ValueError("style_id cannot be empty")
         if not name or not name.strip():
-            raise ValueError("name ต้องไม่ว่าง")
+            raise ValueError("name cannot be empty")
             
         self.__style_id = style_id.strip()
         self.__name = name.strip()
         self.__description = description.strip()
         self.__created_at = datetime.now()
     
-    # ── Properties (Read-only) ──
-    
     @property
     def style_id(self) -> str:
-        """รหัสสไตล์ (read-only)"""
         return self.__style_id
     
     @property
     def name(self) -> str:
-        """ชื่อสไตล์"""
         return self.__name
     
     @property
     def description(self) -> str:
-        """คำอธิบายสไตล์"""
         return self.__description
     
     @property
     def created_at(self) -> datetime:
-        """วันที่สร้าง (read-only)"""
         return self.__created_at
-    
-    # ── Setters (เฉพาะ description สามารถแก้ไขได้) ──
     
     @description.setter
     def description(self, value: str):
-        """อัปเดตคำอธิบายสไตล์"""
         self.__description = value.strip() if value else ""
     
-    # ── Methods ──
-    
     def update_description(self, new_description: str) -> None:
-        """
-        อัปเดตคำอธิบายสไตล์
-        
-        Args:
-            new_description: คำอธิบายใหม่
-        """
         self.description = new_description
-        print(f"[TattooStyle] อัปเดตคำอธิบาย '{self.__name}' แล้ว")
+        print(f"[TattooStyle] Updated description for '{self.__name}'")
     
     def is_popular(self) -> bool:
-        """ตรวจสอบว่าเป็นสไตล์ยอดนิยมหรือไม่"""
         return self.__name in self.POPULAR_STYLES
     
     def get_summary(self) -> str:
-        """สรุปข้อมูลสไตล์แบบย่อ"""
-        popular = "⭐ " if self.is_popular() else ""
+        popular = "* " if self.is_popular() else ""
         return f"{popular}{self.__name} ({self.__style_id})"
-    
-    # ── Magic Methods ──
     
     def __repr__(self) -> str:
         return f"<TattooStyle id={self.__style_id} name={self.__name}>"
@@ -186,90 +138,56 @@ class TattooStyle:
         return self.__name
     
     def __eq__(self, other) -> bool:
-        """เปรียบเทียบสไตล์ตาม style_id"""
         if not isinstance(other, TattooStyle):
             return False
         return self.__style_id == other.style_id
     
     def __hash__(self) -> int:
-        """ทำให้ TattooStyle ใช้ใน set/dict ได้"""
         return hash(self.__style_id)
 
 
 class Portfolio:
-    """
-    คลาสสำหรับเก็บ Portfolio ผลงานรอยสัก
-    
-    Attributes:
-        portfolio_id: รหัสเฉพาะของ portfolio
-        owner_id: รหัสเจ้าของ (artist_id)
-        style: สไตล์หลักของ portfolio (optional)
-        images: รายการรูปภาพ (paths/URLs)
-        description: คำอธิบาย portfolio
-    """
-    
-    # Class variable: รูปแบบไฟล์ที่รองรับ
     SUPPORTED_FORMATS = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
-    MAX_IMAGES = 50  # จำนวนรูปสูงสุด
+    MAX_IMAGES = 50
     
     def __init__(self, portfolio_id: str, owner_id: str = "", 
                  style: Optional['TattooStyle'] = None, description: str = ""):
-        """
-        สร้าง Portfolio object
-        
-        Args:
-            portfolio_id: รหัส portfolio (ต้องไม่ว่าง)
-            owner_id: รหัสเจ้าของ (optional สำหรับ backward compatibility)
-            style: สไตล์หลัก (TattooStyle object, optional)
-            description: คำอธิบาย portfolio
-            
-        Raises:
-            ValueError: ถ้า portfolio_id ว่าง
-        """
         if not portfolio_id or not portfolio_id.strip():
-            raise ValueError("portfolio_id ต้องไม่ว่าง")
+            raise ValueError("portfolio_id cannot be empty")
             
         self.__portfolio_id = portfolio_id.strip()
         self.__owner_id = owner_id.strip() if owner_id else ""
         self.__style = style
         self.__images: list = []
-        self.__styles: list = []  # รักษาไว้สำหรับ backward compatibility
+        self.__styles: list = []
         self.__description = description.strip()
         self.__created_at = datetime.now()
         self.__updated_at = datetime.now()
         self.__is_public = True
         self.__view_count = 0
     
-    # ── Properties ──
-    
     @property
     def portfolio_id(self) -> str:
-        """รหัส portfolio (read-only)"""
         return self.__portfolio_id
     
     @property
     def owner_id(self) -> str:
-        """รหัสเจ้าของ (read-only)"""
         return self.__owner_id
     
     @property
     def style(self) -> Optional['TattooStyle']:
-        """สไตล์หลัก"""
         return self.__style
     
     @property
     def description(self) -> str:
-        """คำอธิบาย portfolio"""
         return self.__description
     
     @property
     def images(self) -> list:
-        """รายการรูปภาพ (copy เพื่อป้องกันการแก้ไขโดยตรง)"""
         return list(self.__images)
     
     @property
     def styles(self) -> list:
-        """รายการสไตล์ทั้งหมด (backward compatibility)"""
         result = list(self.__styles)
         if self.__style and self.__style not in result:
             result.append(self.__style)
@@ -277,265 +195,151 @@ class Portfolio:
     
     @property
     def image_count(self) -> int:
-        """จำนวนรูปภาพ"""
         return len(self.__images)
     
     @property
     def is_public(self) -> bool:
-        """สถานะการเผยแพร่"""
         return self.__is_public
     
     @property
     def view_count(self) -> int:
-        """จำนวนครั้งที่ถูกดู"""
         return self.__view_count
     
     @property
     def created_at(self) -> datetime:
-        """วันที่สร้าง (read-only)"""
         return self.__created_at
     
     @property
     def updated_at(self) -> datetime:
-        """วันที่อัปเดตล่าสุด (read-only)"""
         return self.__updated_at
-    
-    # ── Setters ──
     
     @style.setter
     def style(self, new_style: Optional['TattooStyle']):
-        """เปลี่ยนสไตล์หลัก"""
         if new_style is not None and not isinstance(new_style, TattooStyle):
-            raise TypeError("style ต้องเป็น TattooStyle object หรือ None")
+            raise TypeError("style must be TattooStyle object or None")
         self.__style = new_style
         self.__touch()
     
     @description.setter
     def description(self, value: str):
-        """อัปเดตคำอธิบาย"""
         self.__description = value.strip() if value else ""
         self.__touch()
     
-    # ── Image Management Methods ──
-    
     def add_image(self, image: str) -> bool:
-        """
-        เพิ่มรูปภาพเข้า portfolio
-        
-        Args:
-            image: path หรือ URL ของรูปภาพ
-            
-        Returns:
-            True ถ้าเพิ่มสำเร็จ
-            
-        Raises:
-            ValueError: ถ้ารูปภาพว่าง, ซ้ำ, หรือเกินจำนวนสูงสุด
-        """
         if not image or not image.strip():
-            raise ValueError("image path/URL ต้องไม่ว่าง")
+            raise ValueError("image path/URL cannot be empty")
         
         image = image.strip()
         
-        # เช็คว่าซ้ำหรือไม่
         if image in self.__images:
-            raise ValueError(f"รูปภาพ '{image}' มีอยู่ใน portfolio แล้ว")
+            raise ValueError(f"Image '{image}' already exists in portfolio")
         
-        # เช็คจำนวนสูงสุด
         if len(self.__images) >= self.MAX_IMAGES:
-            raise ValueError(f"Portfolio เต็มแล้ว (สูงสุด {self.MAX_IMAGES} รูป)")
+            raise ValueError(f"Portfolio is full (max {self.MAX_IMAGES} images)")
         
-        # เช็ครูปแบบไฟล์ (สำหรับ file path)
         if not image.startswith(('http://', 'https://')):
             if not any(image.lower().endswith(fmt) for fmt in self.SUPPORTED_FORMATS):
-                print(f"⚠️ Warning: '{image}' อาจไม่ใช่ไฟล์รูปภาพที่รองรับ")
+                print(f"Warning: '{image}' may not be a supported image format")
         
         self.__images.append(image)
         self.__touch()
-        print(f"[Portfolio] เพิ่มรูปภาพ '{image}' สำเร็จ ({self.image_count}/{self.MAX_IMAGES})")
+        print(f"[Portfolio] Added image '{image}' ({self.image_count}/{self.MAX_IMAGES})")
         return True
     
     def remove_image(self, image: str) -> bool:
-        """
-        ลบรูปภาพออกจาก portfolio
-        
-        Args:
-            image: path หรือ URL ของรูปภาพที่ต้องการลบ
-            
-        Returns:
-            True ถ้าลบสำเร็จ
-            
-        Raises:
-            ValueError: ถ้าไม่พบรูปภาพ
-        """
         if image not in self.__images:
-            raise ValueError(f"ไม่พบรูปภาพ '{image}' ใน portfolio")
+            raise ValueError(f"Image '{image}' not found in portfolio")
         
         self.__images.remove(image)
         self.__touch()
-        print(f"[Portfolio] ลบรูปภาพ '{image}' สำเร็จ ({self.image_count}/{self.MAX_IMAGES})")
+        print(f"[Portfolio] Removed image '{image}' ({self.image_count}/{self.MAX_IMAGES})")
         return True
     
     def remove_image_by_index(self, index: int) -> str:
-        """
-        ลบรูปภาพตำแหน่งที่ระบุ
-        
-        Args:
-            index: ตำแหน่งของรูปภาพ (0-based)
-            
-        Returns:
-            path/URL ของรูปภาพที่ถูกลบ
-            
-        Raises:
-            IndexError: ถ้า index ไม่ถูกต้อง
-        """
         if not 0 <= index < len(self.__images):
-            raise IndexError(f"index {index} ไม่ถูกต้อง (มีรูปทั้งหมด {len(self.__images)} รูป)")
+            raise IndexError(f"Index {index} out of range (total images: {len(self.__images)})")
         
         removed = self.__images.pop(index)
         self.__touch()
-        print(f"[Portfolio] ลบรูปภาพตำแหน่ง {index} สำเร็จ: '{removed}'")
+        print(f"[Portfolio] Removed image at index {index}: '{removed}'")
         return removed
     
     def clear_images(self) -> int:
-        """
-        ลบรูปภาพทั้งหมด
-        
-        Returns:
-            จำนวนรูปที่ถูกลบ
-        """
         count = len(self.__images)
         self.__images.clear()
         self.__touch()
-        print(f"[Portfolio] ลบรูปภาพทั้งหมด {count} รูป")
+        print(f"[Portfolio] Cleared all {count} images")
         return count
     
     def get_images(self) -> list:
-        """
-        รับรายการรูปภาพทั้งหมด
-        
-        Returns:
-            List ของ image paths/URLs (copy)
-        """
         return list(self.__images)
     
     def get_image_at(self, index: int) -> str:
-        """
-        รับรูปภาพตำแหน่งที่ระบุ
-        
-        Args:
-            index: ตำแหน่งของรูปภาพ
-            
-        Returns:
-            path/URL ของรูปภาพ
-            
-        Raises:
-            IndexError: ถ้า index ไม่ถูกต้อง
-        """
         if not 0 <= index < len(self.__images):
-            raise IndexError(f"index {index} ไม่ถูกต้อง")
+            raise IndexError(f"Index {index} out of range")
         return self.__images[index]
     
     def has_image(self, image: str) -> bool:
-        """ตรวจสอบว่ามีรูปภาพนี้หรือไม่"""
         return image in self.__images
     
-    # ── Style Management Methods ──
-    
     def add_style(self, style: TattooStyle) -> None:
-        """
-        เพิ่มสไตล์เข้า portfolio (backward compatibility)
-        
-        Args:
-            style: TattooStyle object
-        """
         if not isinstance(style, TattooStyle):
-            raise TypeError("style ต้องเป็น TattooStyle object")
+            raise TypeError("style must be TattooStyle object")
         if style not in self.__styles:
             self.__styles.append(style)
             self.__touch()
     
     def remove_style(self, style: TattooStyle) -> None:
-        """ลบสไตล์ออกจาก portfolio"""
         if style in self.__styles:
             self.__styles.remove(style)
             self.__touch()
     
-    # ── Description Methods ──
-    
     def update_description(self, description: str) -> None:
-        """
-        อัปเดตคำอธิบาย portfolio
-        
-        Args:
-            description: คำอธิบายใหม่
-        """
         self.description = description
-        print(f"[Portfolio] อัปเดตคำอธิบายแล้ว")
+        print(f"[Portfolio] Updated description")
     
     def append_description(self, additional_text: str) -> None:
-        """เพิ่มข้อความต่อท้ายคำอธิบาย"""
         self.__description = f"{self.__description}\n{additional_text}".strip()
         self.__touch()
     
-    # ── Style Methods ──
-    
     def change_style(self, new_style: TattooStyle) -> None:
-        """
-        เปลี่ยนสไตล์หลัก
-        
-        Args:
-            new_style: สไตล์ใหม่
-        """
         old_style = self.__style
         self.style = new_style
         old_name = old_style.name if old_style else "None"
         new_name = new_style.name if new_style else "None"
-        print(f"[Portfolio] เปลี่ยนสไตล์: {old_name} → {new_name}")
-    
-    # ── Visibility Methods ──
+        print(f"[Portfolio] Changed style: {old_name} -> {new_name}")
     
     def publish(self) -> None:
-        """เผยแพร่ portfolio ให้ทุกคนเห็น"""
         if self.__is_public:
-            print("[Portfolio] portfolio เผยแพร่อยู่แล้ว")
+            print("[Portfolio] Portfolio is already published")
             return
         self.__is_public = True
         self.__touch()
-        print("[Portfolio] เผยแพร่ portfolio สำเร็จ")
+        print("[Portfolio] Published portfolio")
     
     def unpublish(self) -> None:
-        """ซ่อน portfolio (ตั้งเป็น private)"""
         if not self.__is_public:
-            print("[Portfolio] portfolio ถูกซ่อนอยู่แล้ว")
+            print("[Portfolio] Portfolio is already private")
             return
         self.__is_public = False
         self.__touch()
-        print("[Portfolio] ซ่อน portfolio แล้ว")
+        print("[Portfolio] Unpublished portfolio")
     
     def increment_view(self) -> int:
-        """เพิ่มจำนวนการดู (เมื่อมีคนเปิดดู portfolio)"""
         self.__view_count += 1
         return self.__view_count
     
-    # ── Validation Methods ──
-    
     def is_empty(self) -> bool:
-        """ตรวจสอบว่า portfolio ว่างเปล่าหรือไม่"""
         return len(self.__images) == 0
     
     def is_full(self) -> bool:
-        """ตรวจสอบว่า portfolio เต็มหรือไม่"""
         return len(self.__images) >= self.MAX_IMAGES
     
     def can_add_images(self, count: int = 1) -> bool:
-        """ตรวจสอบว่าสามารถเพิ่มรูปได้อีกหรือไม่"""
         return len(self.__images) + count <= self.MAX_IMAGES
     
-    # ── Display Methods ──
-    
     def get_summary(self) -> str:
-        """สรุปข้อมูล portfolio"""
-        visibility = "🌐 Public" if self.__is_public else "🔒 Private"
+        visibility = "Public" if self.__is_public else "Private"
         style_name = self.__style.name if self.__style else "No style"
         owner = f"Owner: {self.__owner_id}" if self.__owner_id else "No owner"
         return (
@@ -549,22 +353,16 @@ class Portfolio:
         )
     
     def list_images(self) -> str:
-        """แสดงรายการรูปภาพทั้งหมดพร้อม index"""
         if self.is_empty():
-            return "📷 ไม่มีรูปภาพใน portfolio"
+            return "No images in portfolio"
         
-        lines = [f"📷 รูปภาพใน Portfolio ({self.image_count} รูป):"]
+        lines = [f"Images in Portfolio ({self.image_count} images):"]
         for i, img in enumerate(self.__images):
             lines.append(f"  [{i}] {img}")
         return "\n".join(lines)
     
-    # ── Helper Methods ──
-    
     def __touch(self) -> None:
-        """อัปเดตเวลาที่แก้ไขล่าสุด (private method)"""
         self.__updated_at = datetime.now()
-    
-    # ── Magic Methods ──
     
     def __repr__(self) -> str:
         style_name = self.__style.name if self.__style else "None"
@@ -576,21 +374,16 @@ class Portfolio:
         return f"{self.__portfolio_id} ({style_name} - {self.image_count} images)"
     
     def __len__(self) -> int:
-        """ใช้ len(portfolio) เพื่อดูจำนวนรูป"""
         return len(self.__images)
     
     def __contains__(self, image: str) -> bool:
-        """ใช้ 'image' in portfolio เพื่อเช็ครูปภาพ"""
         return image in self.__images
     
     def __iter__(self):
-        """ทำให้ portfolio วนลูปได้"""
         return iter(self.__images)
     
     def __getitem__(self, index: int) -> str:
-        """ใช้ portfolio[index] เพื่อเข้าถึงรูปภาพ"""
         return self.__images[index]
-
 
 
 class Event:
@@ -632,8 +425,6 @@ class Calendar:
 
 
 class StudioRequest:
-    """Status: PENDING → APPROVED / REJECTED"""
-
     STATUS_PENDING  = "PENDING"
     STATUS_APPROVED = "APPROVED"
     STATUS_REJECTED = "REJECTED"
@@ -647,19 +438,19 @@ class StudioRequest:
         self.__created_at = datetime.now()
 
     def submit(self):
-        print(f"[StudioRequest] ส่งคำขอ {self.__request_id} แล้ว รอ Admin อนุมัติ")
+        print(f"[StudioRequest] Submitted request {self.__request_id}, waiting for admin approval")
 
     def approve(self):
         if self.__status != self.STATUS_PENDING:
-            raise Exception("อนุมัติได้เฉพาะ PENDING เท่านั้น")
+            raise Exception("Can only approve PENDING requests")
         self.__status = self.STATUS_APPROVED
-        print(f"[StudioRequest] {self.__request_id} ได้รับการอนุมัติแล้ว")
+        print(f"[StudioRequest] {self.__request_id} approved")
 
     def reject(self):
         if self.__status != self.STATUS_PENDING:
-            raise Exception("ปฏิเสธได้เฉพาะ PENDING เท่านั้น")
+            raise Exception("Can only reject PENDING requests")
         self.__status = self.STATUS_REJECTED
-        print(f"[StudioRequest] {self.__request_id} ถูกปฏิเสธ")
+        print(f"[StudioRequest] {self.__request_id} rejected")
 
     @property
     def request_id(self): return self.__request_id
@@ -681,8 +472,6 @@ class StudioRequest:
 
 
 class Studio:
-    """Status: OPEN / CLOSED"""
-
     STATUS_OPEN   = "OPEN"
     STATUS_CLOSED = "CLOSED"
 
@@ -695,21 +484,21 @@ class Studio:
 
     def add_artist(self, artist_id: str):
         if artist_id in self.__artist_list:
-            raise ValueError(f"Artist {artist_id} อยู่ใน Studio นี้แล้ว")
+            raise ValueError(f"Artist {artist_id} already in studio")
         self.__artist_list.append(artist_id)
 
     def delete_artist(self, artist_id: str):
         if artist_id not in self.__artist_list:
-            raise ValueError(f"ไม่พบ Artist {artist_id} ใน Studio นี้")
+            raise ValueError(f"Artist {artist_id} not found in studio")
         self.__artist_list.remove(artist_id)
 
     def open_studio(self):
         self.__status = self.STATUS_OPEN
-        print(f"[Studio] {self.__name} เปิดแล้ว")
+        print(f"[Studio] {self.__name} opened")
 
     def close_studio(self):
         self.__status = self.STATUS_CLOSED
-        print(f"[Studio] {self.__name} ปิดแล้ว")
+        print(f"[Studio] {self.__name} closed")
 
     @property
     def studio_id(self): return self.__studio_id
@@ -725,8 +514,6 @@ class Studio:
 
 
 class User:
-    """Status: ACTIVE / SUSPENDED"""
-
     STATUS_ACTIVE    = "ACTIVE"
     STATUS_SUSPENDED = "SUSPENDED"
 
@@ -752,7 +539,6 @@ class User:
     def check_password(self, password: str) -> bool:
         return self.__password == password
 
-    # ── public properties ──
     @property
     def user_id(self): return self.__user_id
 
@@ -783,7 +569,6 @@ class User:
     @property
     def mailbox(self): return self.__mailbox
 
-    # ── protected properties (สำหรับ subclass / controller เข้าถึง) ──
     @property
     def _user_id(self): return self.__user_id
 
@@ -847,20 +632,19 @@ class User:
     @property
     def _coupon_list(self): return self.__coupon_list
 
-    # ── methods ──
     def add_spent(self, amount: float):
         if amount > 0:
             self.__total_spent += amount
-            print(f"[User] {self.__name} ยอดสะสม: {self.__total_spent:.2f} บาท")
+            print(f"[User] {self.__name} total spent: {self.__total_spent:.2f} THB")
 
     def add_credit(self, amount: float):
         if amount <= 0:
-            raise ValueError("จำนวนเงินต้องมากกว่า 0")
+            raise ValueError("Amount must be greater than 0")
         self.__credit += amount
 
     def deduct_credit(self, amount: float):
         if amount > self.__credit:
-            raise ValueError("เครดิตไม่เพียงพอ")
+            raise ValueError("Insufficient credit")
         self.__credit -= amount
 
     def view_history(self) -> list:
@@ -879,35 +663,33 @@ class User:
         for coupon in self.__coupon_list:
             if coupon.coupon_code == coupon_code:
                 if not coupon.is_valid():
-                    raise ValueError("คูปองหมดอายุแล้ว")
+                    raise ValueError("Coupon has expired")
                 discount_amount = base_price * (coupon.discount / 100)
                 self.__coupon_list.remove(coupon)
-                print(f"[User] ใช้คูปอง {coupon_code} ลด {coupon.discount}%")
+                print(f"[User] Used coupon {coupon_code} - {coupon.discount}% discount")
                 return base_price - discount_amount
-        raise ValueError(f"ไม่พบคูปอง {coupon_code}")
+        raise ValueError(f"Coupon {coupon_code} not found")
 
     def submit(self):
         self.__submitting = True
-        print(f"[User] {self.__name} ยืนยันการจองแล้ว")
+        print(f"[User] {self.__name} confirmed booking")
 
     def suspend(self):
         self.__status = self.STATUS_SUSPENDED
-        print(f"[User] บัญชี {self.__name} ถูกระงับ")
+        print(f"[User] Account {self.__name} suspended")
 
     def __repr__(self):
         return f"<User id={self.__user_id} name={self.__name} status={self.__status}>"
 
 
 class VIPMember(User):
-    """Inheritance: User → VIPMember"""
     RANK_SILVER   = "SILVER"
     RANK_GOLD     = "GOLD"
     RANK_PLATINUM = "PLATINUM"
 
-    # 🔴 แก้เกณฑ์ใหม่ตามที่กำหนด
-    THRESHOLD_SILVER   = 15_000  # เดิม 5,000
-    THRESHOLD_GOLD     = 25_000  # เดิม 15,000
-    THRESHOLD_PLATINUM = 40_000  # เดิม 30,000
+    THRESHOLD_SILVER   = 15_000
+    THRESHOLD_GOLD     = 25_000
+    THRESHOLD_PLATINUM = 40_000
 
     DISCOUNT_SILVER   =  5
     DISCOUNT_GOLD     = 10
@@ -919,7 +701,6 @@ class VIPMember(User):
         self.__rank = rank
         self._max_bookings = 6
         self._max_calendar = 120
-
 
     @property
     def rank(self): return self.__rank
@@ -943,8 +724,8 @@ class VIPMember(User):
         if new_rank != self.__rank:
             old_rank = self.__rank
             self.__rank = new_rank
-            print(f"[VIPMember] {self._name} อัปเกรด rank: {old_rank} → {new_rank} "
-                  f"(ยอดสะสม {spent:,.2f} บาท)")
+            print(f"[VIPMember] {self._name} upgraded rank: {old_rank} -> {new_rank} "
+                  f"(total spent {spent:,.2f} THB)")
 
     def calculate_discount(self, base_price: float) -> float:
         if self.__rank == self.RANK_PLATINUM:
@@ -954,15 +735,15 @@ class VIPMember(User):
         else:
             rate = self.DISCOUNT_SILVER
         discount = base_price * (rate / 100)
-        print(f"[VIP] rank={self.__rank} ส่วนลด {rate}% = {discount:.2f} บาท")
+        print(f"[VIP] rank={self.__rank} discount {rate}% = {discount:.2f} THB")
         return discount
 
     def upgrade_rank(self, new_rank: str):
         if new_rank not in (self.RANK_SILVER, self.RANK_GOLD, self.RANK_PLATINUM):
-            raise ValueError(f"Rank ไม่ถูกต้อง: {new_rank}")
+            raise ValueError(f"Invalid rank: {new_rank}")
         old = self.__rank
         self.__rank = new_rank
-        print(f"[VIPMember] Admin อัปเกรด rank: {old} → {new_rank}")
+        print(f"[VIPMember] Admin upgraded rank: {old} -> {new_rank}")
 
     def __get_discount_rate(self) -> int:
         if self.__rank == self.RANK_PLATINUM:
@@ -975,12 +756,12 @@ class VIPMember(User):
         spent = self._total_spent
         rate  = self.__get_discount_rate()
         if self.__rank == self.RANK_SILVER:
-            next_info = f" | อีก {self.THRESHOLD_GOLD - spent:,.0f} บาท → GOLD"
+            next_info = f" | {self.THRESHOLD_GOLD - spent:,.0f} THB more to GOLD"
         elif self.__rank == self.RANK_GOLD:
-            next_info = f" | อีก {self.THRESHOLD_PLATINUM - spent:,.0f} บาท → PLATINUM"
+            next_info = f" | {self.THRESHOLD_PLATINUM - spent:,.0f} THB more to PLATINUM"
         else:
-            next_info = " | ระดับสูงสุดแล้ว"
-        return f"rank={self.__rank} | ยอดสะสม {spent:,.2f} บาท | ส่วนลด {rate}%{next_info}"
+            next_info = " | Max rank achieved"
+        return f"rank={self.__rank} | total spent {spent:,.2f} THB | discount {rate}%{next_info}"
 
     def __repr__(self):
         return (f"<VIPMember id={self._user_id} name={self._name} "
@@ -988,8 +769,6 @@ class VIPMember(User):
 
 
 class Staff(User, ABC):
-    """Abstract สำหรับพนักงาน — Artist และ Admin ต้อง inherit"""
-
     def __init__(self, staff_id: str, name: str, email: str, password: str):
         super().__init__(staff_id, name, email, "", password)
         self.__staff_mailbox = Mailbox(staff_id)
@@ -1026,8 +805,6 @@ class Staff(User, ABC):
 
 
 class Artist(Staff):
-    """Status: PENDING → VERIFIED → SUSPENDED"""
-
     STATUS_PENDING   = "PENDING"
     STATUS_VERIFIED  = "VERIFIED"
     STATUS_SUSPENDED = "SUSPENDED"
@@ -1041,35 +818,29 @@ class Artist(Staff):
         self.__request_list: list = []
         self.__available_days: list[date] = []
         self.__status = "pending"
-        self.__deposit_policy = None  # 🔴 เพิ่มบรรทัดนี้
+        self.__deposit_policy = None
 
- 
     def set_available_days(self, days: list):
-        """Artist ตั้งวันว่าง"""
         self.__available_days = days
-        print(f"[Artist] {self._name} ตั้งวันว่าง {len(days)} วัน")
+        print(f"[Artist] {self._name} set {len(days)} available days")
 
     def add_available_day(self, day):
-        """เพิ่มวันว่าง"""
         if day not in self.__available_days:
             self.__available_days.append(day)
 
     def get_available_days(self):
-        """คืนรายการวันว่าง"""
         return list(self.__available_days)
 
     def is_available(self, target_date):
-        """เช็คว่าวันนี้ว่างไหม"""
         if target_date not in self.__available_days:
             return False
-
         busy = self.__calendar.get_busy_dates()
         return target_date not in busy
 
     def view_available_days(self):
-        """ดูวันว่างที่ยังไม่ถูกจอง"""
         busy = self.__calendar.get_busy_dates()
         return [d for d in self.__available_days if d not in busy]
+
     @property
     def staff_id(self): return self._user_id
 
@@ -1093,7 +864,7 @@ class Artist(Staff):
 
     def verify_identity(self):
         self.__status = self.STATUS_VERIFIED
-        print(f"[Artist] {self._name} ยืนยันตัวตนแล้ว")
+        print(f"[Artist] {self._name} identity verified")
 
     def set_calendar(self) -> Calendar:
         self.__calendar = Calendar(owner_id=self._user_id)
@@ -1101,23 +872,23 @@ class Artist(Staff):
 
     def set_deposit_policy(self, policy):
         self.__deposit_policy = policy
-        print(f"[Artist] {self._name} ตั้ง deposit policy แล้ว: {policy}")
+        print(f"[Artist] {self._name} set deposit policy: {policy}")
 
     def accept_job(self, booking) -> bool:
         if self.__status != self.STATUS_VERIFIED:
-            raise Exception("Artist ต้องผ่านการยืนยันตัวตนก่อน")
+            raise Exception("Artist must be verified first")
         booking.accept()
         self.__booking_list.append(booking)
-        print(f"[Artist] {self._name} รับงาน {booking.booking_id}")
+        print(f"[Artist] {self._name} accepted job {booking.booking_id}")
         return True
 
     def reject_job(self, booking, reason: str = ""):
         booking.cancel()
-        print(f"[Artist] {self._name} ปฏิเสธงาน {booking.booking_id}: {reason}")
+        print(f"[Artist] {self._name} rejected job {booking.booking_id}: {reason}")
 
     def complete_job(self, booking):
         booking.complete()
-        print(f"[Artist] {self._name} เสร็จงาน {booking.booking_id}")
+        print(f"[Artist] {self._name} completed job {booking.booking_id}")
 
     def manage_time(self, event: Event):
         if self.__calendar is None:
@@ -1146,15 +917,13 @@ class Artist(Staff):
             self._name = kwargs["name"]
         if "experience" in kwargs:
             self.__experience = kwargs["experience"]
-        print(f"[Artist] อัปเดต profile แล้ว")
+        print(f"[Artist] Profile updated")
 
     def __repr__(self):
         return f"<Artist id={self._user_id} name={self._name} status={self.__status}>"
 
 
 class Admin(Staff):
-    """ผู้ดูแลระบบ — Inheritance: Staff → Admin"""
-
     def __init__(self, staff_id: str, name: str, email: str, password: str):
         super().__init__(staff_id, name, email, password)
         self.__requests: list = []
@@ -1162,16 +931,13 @@ class Admin(Staff):
     @property
     def staff_id(self): return self._user_id
 
-    
-        
     def approve_artist(self, artist: Artist):
-
         artist.verify_identity()
-        print(f"[Admin] อนุมัติ Artist {artist.name} แล้ว")
+        print(f"[Admin] Approved artist {artist.name}")
 
     def reject_artist(self, artist: Artist):
         artist._status = Artist.STATUS_SUSPENDED
-        print(f"[Admin] ปฏิเสธ Artist {artist.name}")
+        print(f"[Admin] Rejected artist {artist.name}")
 
     def approve_studio(self, request: StudioRequest, studio_list: list):
         request.approve()
@@ -1189,10 +955,10 @@ class Admin(Staff):
 
     def suspend_user(self, user: User):
         user.suspend()
-        print(f"[Admin] ระงับ User {user.name} แล้ว")
+        print(f"[Admin] Suspended user {user.name}")
 
     def manage_policy(self, policy_info: str):
-        print(f"[Admin] อัปเดต policy: {policy_info}")
+        print(f"[Admin] Updated policy: {policy_info}")
 
     def view_schedule(self):
         return []
@@ -1200,7 +966,7 @@ class Admin(Staff):
     def update_profile(self, **kwargs):
         if "name" in kwargs:
             self._name = kwargs["name"]
-        print(f"[Admin] อัปเดต profile แล้ว")
+        print(f"[Admin] Profile updated")
 
     def __repr__(self):
         return f"<Admin id={self._user_id} name={self._name}>"

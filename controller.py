@@ -1,9 +1,3 @@
-"""
-controller.py — SoonSak Facade Controller
-- ทุก attribute เป็น private (__attr)
-- ไม่ใช้ Dict เลย ใช้ list + linear search ทั้งหมด
-"""
-
 from datetime import date, datetime
 from entities import (
     User, VIPMember, Artist, Admin,
@@ -20,10 +14,7 @@ from payment import (
     DepositPolicy
 )
 
-
 class SoonSak:
-    """Controller หลักของระบบ SoonSak (Facade Pattern)"""
-
     def __init__(self):
         self.__user_list: list[User]     = []
         self.__artist_list: list[Artist] = []
@@ -39,11 +30,7 @@ class SoonSak:
         self.__request_counter  = 0
         self.__logged_in_users: list[str] = []
         self.__appointment_counter = 0 
-        print("=" * 50)
-        print("  ระบบ SoonSak เริ่มต้นแล้ว")
-        print("=" * 50)
-
-    # ── expose lists สำหรับ mcp_server ──
+        
     @property
     def _user_list(self): return self.__user_list
 
@@ -62,15 +49,9 @@ class SoonSak:
     @property
     def _logged_in_users(self): return self.__logged_in_users
 
-
-    
-    def _new_appointment_id(self) -> str:  # 🔴 เพิ่ม
+    def _new_appointment_id(self) -> str:
         self.__appointment_counter += 1
         return f"APT-{self.__appointment_counter:03d}"
-    
-    # ── Create Booking (แก้ไข: เพิ่ม description) ──
-        
-    # ── Add Appointment to Booking (🔴 เพิ่มใหม่) ──
     
     def add_appointment(
         self,
@@ -80,17 +61,12 @@ class SoonSak:
         start_time: str = "10:00",
         end_time: str = "18:00"
     ) -> Appointment:
-        """
-        เพิ่ม appointment เข้า booking
-        - ตรวจสอบว่า artist ว่างในวันนั้นหรือไม่
-        """
         self.__require_login(user_id)
         
         artist = self.find_artist(booking.artist_id)
         if not artist.is_available(appointment_date):
             raise Exception(f"Artist {booking.artist_id} ไม่ว่างวันที่ {appointment_date}")
         
-        # สร้าง appointment
         session_number = booking.appointment_count + 1
         appointment = Appointment(
             appointment_id=self._new_appointment_id(),
@@ -101,10 +77,8 @@ class SoonSak:
             end_time=end_time
         )
         
-        # เพิ่มเข้า booking
         booking.add_appointment(appointment)
         
-        # เพิ่ม event เข้า artist calendar
         event = Event(
             event_id=f"EVT-{self.__event_counter+1:03d}",
             event_name=f"Tattoo Session #{session_number} for {booking.user_id}",
@@ -118,11 +92,6 @@ class SoonSak:
         print(f"[SoonSak] เพิ่ม Appointment #{session_number} (วันที่ {appointment_date}) เข้า Booking {booking.booking_id}")
         return appointment
     
-    # ── Create Order (แก้ไข: 1 Order = 1 Booking) ──
-
-
-    # ── ID Generators ──
-
     def _new_booking_id(self) -> str:
         self.__booking_counter += 1
         return f"BKG-{self.__booking_counter:03d}"
@@ -138,8 +107,6 @@ class SoonSak:
     def _new_request_id(self) -> str:
         self.__request_counter += 1
         return f"REQ-{self.__request_counter:03d}"
-
-    # ── Authentication ──
 
     def login(self, user_id: str, password: str) -> bool:
         entity = self.find_user(user_id) or self.find_artist(user_id) or self.__find_admin(user_id)
@@ -168,11 +135,8 @@ class SoonSak:
         if user_id not in self.__logged_in_users:
             raise PermissionError(f"{user_id} ต้องล็อกอินก่อน")
 
-    # expose เป็น protected สำหรับ subclass ถ้าจำเป็น
     def _require_login(self, user_id: str):
         self.__require_login(user_id)
-
-    # ── Find (linear search แทน dict) ──
 
     def find_user(self, user_id: str) -> User:
         for user in self.__user_list:
@@ -197,8 +161,6 @@ class SoonSak:
             if admin.staff_id == admin_id:
                 return admin
         return None
-
-    # ── Register ──
 
     def register_user(self, user_id: str, name: str, email: str,
                       phone: str, password: str) -> User:
@@ -225,16 +187,11 @@ class SoonSak:
         print(f"[Register] สร้าง Admin {admin} สำเร็จ")
         return admin
 
-    # ── Booking Flow ──
-    
-
     def create_booking(self, user_id: str, artist_id: str,
                    body_part: str, size: str, color_tone: str,
                    base_price: float,
                    description: str = "",
                    reference_image: str = "") -> Booking:
-        """สร้าง Booking (ยังไม่มี appointment)"""
-        
         self.__require_login(user_id)
         user = self.find_user(user_id)
         if user is None:
@@ -266,8 +223,6 @@ class SoonSak:
         print(f"[SoonSak] สร้าง {booking} สำเร็จ")
         return booking
 
-     
-
     def cancel_booking(self, user_id: str, booking: Booking):
         self.__require_login(user_id)
         if booking.user_id != user_id:
@@ -275,33 +230,29 @@ class SoonSak:
         booking.cancel()
         print(f"[SoonSak] {user_id} ยกเลิก {booking.booking_id} สำเร็จ")
 
-    # ── Order & Payment Flow ──
-
     def create_order(self, booking: Booking,
                  apply_vip_discount: bool = True,
                  coupon_code: str = None) -> Order:
-        """สร้าง Order จาก Booking"""
         user = self.find_user(booking.user_id)
         final_price = booking.base_price
 
         if apply_vip_discount and user is not None and isinstance(user, VIPMember):
             discount = user.calculate_discount(final_price)
             final_price -= discount
-            print(f"[SoonSak] หักส่วนลด VIP {user.rank}: {booking.base_price:.2f} → {final_price:.2f} บาท")
+            print(f"[SoonSak] หักส่วนลด VIP {user.rank}: {booking.base_price:.2f} -> {final_price:.2f} บาท")
 
         if coupon_code and user is not None:
             try:
                 final_price = user.use_coupon(coupon_code, final_price)
                 print(f"[SoonSak] หักคูปอง {coupon_code}: ราคาสุดท้าย {final_price:.2f} บาท")
             except ValueError as e:
-                print(f"[SoonSak] ⚠️ ใช้คูปองไม่ได้: {e}")
+                print(f"[SoonSak] ใช้คูปองไม่ได้: {e}")
 
         booking.set_price(final_price)
         order = Order(order_id=self._new_order_id(), booking=booking)
         self.__order_list.append(order)
         print(f"[SoonSak] สร้าง {order} สำเร็จ")
         return order
-
 
     def process_payment(self, user_id: str, order: Order,
                         payment_method: PaymentMethod,
@@ -344,19 +295,15 @@ class SoonSak:
                     if u.user_id == user.user_id:
                         self.__user_list[i] = vip
                         break
-                print(f"[SoonSak] 🎉 {vip.name} ได้รับสถานะ VIPMember! rank={vip.rank} (ยอดสะสม {spent:,.2f} บาท)")
+                print(f"[SoonSak] {vip.name} ได้รับสถานะ VIPMember! rank={vip.rank} (ยอดสะสม {spent:,.2f} บาท)")
         else:
             user.check_and_upgrade()
-
-    # ── Artist Actions ──
 
     def artist_accept_job(self, artist_id: str, booking: Booking):
         self.__require_login(artist_id)
         artist = self.find_artist(artist_id)
         if artist is None:
             raise ValueError(f"ไม่พบ Artist {artist_id}")
-        
-        # ลบส่วนสร้าง Event ออก (จะสร้างตอน add_appointment แทน)
         artist.accept_job(booking)
 
     def artist_reject_job(self, artist_id: str, booking: Booking, reason: str = ""):
@@ -385,8 +332,6 @@ class SoonSak:
         request = StudioRequest(self._new_request_id(), artist_id, studio_name, location)
         artist.request_studio(request)
         return request
-
-    # ── Admin Actions ──
 
     def admin_approve_artist(self, admin_id: str, artist_id: str):
         self.__require_login(admin_id)
@@ -436,8 +381,6 @@ class SoonSak:
         print(f"[Admin] เพิ่มคูปอง {coupon_code} ({discount}%) ให้ {user.name}")
         return coupon
 
-    # ── Rating ──
-
     def rate_artist(self, user_id: str, artist_id: str,
                     booking: Booking, score: int, comment: str) -> Rating:
         self.__require_login(user_id)
@@ -453,18 +396,16 @@ class SoonSak:
         print(f"[SoonSak] {user_id} ให้คะแนน Artist {artist_id}: {score}/5")
         return rating
 
-    # ── Reports ──
-
     def report_bank_balance(self):
-        print("\n" + "─" * 40)
+        print("\n" + "-" * 40)
         print("  รายงานยอดเงิน SoonSak Bank")
-        print("─" * 40)
+        print("-" * 40)
         self.__bank.check_balance()
         history = self.__bank.get_history()
         print(f"  รายการทั้งหมด: {len(history)} รายการ")
         for txn in history:
             print(f"  {txn}")
-        print("─" * 40 + "\n")
+        print("-" * 40 + "\n")
 
     def report_artist_ratings(self, artist_id: str):
         artist = self.find_artist(artist_id)

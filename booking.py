@@ -1,23 +1,6 @@
-"""
-booking.py — Appointment, Booking, Order
-- ทุก attribute เป็น private (__attr)
-- ไม่ใช้ Dict เลย ใช้ list ทั้งหมด
-"""
-
 from datetime import datetime, date
 
-
 class Appointment:
-    """
-    การนัดหมายแต่ละครั้ง (1 Booking มีได้หลาย Appointments)
-    
-    Status Flow:
-    SCHEDULED → IN_PROGRESS → COMPLETED
-              → CANCELLED
-              → RESCHEDULED → SCHEDULED
-              → NO_SHOW
-    """
-    
     STATUS_SCHEDULED = "SCHEDULED"
     STATUS_IN_PROGRESS = "IN_PROGRESS"
     STATUS_COMPLETED = "COMPLETED"
@@ -101,7 +84,7 @@ class Appointment:
         self.__status = self.STATUS_RESCHEDULED
         self.__notes = f"Rescheduled from {old_date} to {new_date}"
         self.__touch()
-        print(f"[Appointment] {self.__appointment_id} เลื่อนนัดจาก {old_date} → {new_date}")
+        print(f"[Appointment] {self.__appointment_id} เลื่อนนัดจาก {old_date} -> {new_date}")
     
     def mark_no_show(self) -> None:
         self.__status = self.STATUS_NO_SHOW
@@ -116,17 +99,8 @@ class Appointment:
         self.__updated_at = datetime.now()
     
     def get_summary(self) -> str:
-        emoji = {
-            self.STATUS_SCHEDULED: "📅",
-            self.STATUS_IN_PROGRESS: "🔄",
-            self.STATUS_COMPLETED: "✅",
-            self.STATUS_CANCELLED: "❌",
-            self.STATUS_RESCHEDULED: "🔄",
-            self.STATUS_NO_SHOW: "⚠️"
-        }.get(self.__status, "📌")
-        
         return (
-            f"{emoji} Session #{self.__session_number} ({self.__appointment_id})\n"
+            f"Session #{self.__session_number} ({self.__appointment_id})\n"
             f"  Date   : {self.__date}\n"
             f"  Time   : {self.__start_time} - {self.__end_time}\n"
             f"  Status : {self.__status}\n"
@@ -138,14 +112,6 @@ class Appointment:
 
 
 class Booking:
-    """
-    Booking สำหรับรอยสักหนึ่งชิ้น
-    - 1 Booking = 1 design (มี size, body_part, color_tone, price)
-    - 1 Booking → Multiple Appointments (สักหลายวัน)
-    
-    Status: WAITING → ACCEPTED → IN_PROGRESS → COMPLETED / CANCELLED / NO_SHOW
-    """
-
     STATUS_WAITING   = "WAITING"
     STATUS_ACCEPTED  = "ACCEPTED"
     STATUS_IN_PROGRESS = "IN_PROGRESS"
@@ -287,9 +253,9 @@ class Booking:
     
     def list_appointments(self) -> str:
         if not self.__appointment_list:
-            return "📅 ยังไม่มี appointment"
+            return "Appointments: ยังไม่มี appointment"
         
-        lines = [f"📅 Appointments ({len(self.__appointment_list)} sessions):"]
+        lines = [f"Appointments ({len(self.__appointment_list)} sessions):"]
         for appt in sorted(self.__appointment_list, key=lambda a: a.session_number):
             lines.append(f"\n{appt.get_summary()}")
         return "\n".join(lines)
@@ -316,14 +282,6 @@ class Booking:
 
 
 class Order:
-    """
-    Order สำหรับรอยสักหนึ่งชิ้น
-    - 1 Order = 1 Booking (1 design, 1 price)
-    - 1 Booking → Multiple Appointments
-    
-    Status: PENDING_PAYMENT → DEPOSIT_PAID → FULLY_PAID → CLOSED / REFUNDED
-    """
-
     STATUS_PENDING_PAYMENT = "PENDING_PAYMENT"
     STATUS_DEPOSIT_PAID    = "DEPOSIT_PAID"
     STATUS_FULLY_PAID      = "FULLY_PAID"
@@ -379,7 +337,7 @@ class Order:
             self.STATUS_REFUNDED:        "คืนเงินแล้ว",
         }
         phase = phases.get(self.__status, "ไม่ทราบสถานะ")
-        print(f"[Order] {self.__order_id} → {phase}")
+        print(f"[Order] {self.__order_id} -> {phase}")
         return self.__status
 
     def pay_deposit(self, amount: float):

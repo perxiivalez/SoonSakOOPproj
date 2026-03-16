@@ -1,9 +1,3 @@
-"""
-payment.py — DepositPolicy, PaymentMethod, Transaction, SoonSakBank, Payment
-- ทุก attribute เป็น private (__attr)
-- ไม่ใช้ Dict เลย ใช้ list ทั้งหมด
-"""
-
 from abc import ABC, abstractmethod
 from datetime import datetime
 
@@ -19,12 +13,12 @@ class DepositPolicy(ABC):
 class FixedDepositPolicy(DepositPolicy):
     def __init__(self, fixed_amount: float):
         if fixed_amount < 0:
-            raise ValueError("จำนวนมัดจำต้องไม่ติดลบ")
+            raise ValueError("Deposit amount cannot be negative")
         self.__fixed_amount = fixed_amount
 
     def calculate_deposit(self, full_price: float) -> float:
         deposit = min(self.__fixed_amount, full_price)
-        print(f"[FixedDeposit] มัดจำ {deposit:.2f} บาท")
+        print(f"[FixedDeposit] Deposit {deposit:.2f} THB")
         return deposit
 
     def __repr__(self):
@@ -34,12 +28,12 @@ class FixedDepositPolicy(DepositPolicy):
 class PercentDepositPolicy(DepositPolicy):
     def __init__(self, percent: float):
         if not (0 < percent <= 100):
-            raise ValueError("เปอร์เซ็นต์ต้องอยู่ระหว่าง 0-100")
+            raise ValueError("Percent must be between 0-100")
         self.__percent = percent
 
     def calculate_deposit(self, full_price: float) -> float:
         deposit = full_price * (self.__percent / 100)
-        print(f"[PercentDeposit] มัดจำ {self.__percent}% = {deposit:.2f} บาท")
+        print(f"[PercentDeposit] Deposit {self.__percent}% = {deposit:.2f} THB")
         return deposit
 
     def __repr__(self):
@@ -61,29 +55,27 @@ class Promptpay(PaymentMethod):
 
     def pay(self, amount: float) -> bool:
         if amount <= 0:
-            raise ValueError("จำนวนเงินต้องมากกว่า 0")
-        print(f"[Promptpay] ส่ง {amount:.2f} บาท ไปที่ {self.__phone_or_id} ({self.__bank})")
+            raise ValueError("Amount must be greater than 0")
+        print(f"[Promptpay] Sent {amount:.2f} THB to {self.__phone_or_id} ({self.__bank})")
         return True
 
     def kbank(self):
-        print(f"[Promptpay] เชื่อมต่อ KBank สำเร็จ")
+        print(f"[Promptpay] Connected to KBank successfully")
 
     def __repr__(self):
         return f"<Promptpay id={self.__phone_or_id} bank={self.__bank}>"
 
 
 class Transaction:
-    """Status: PENDING → SUCCESS / FAILED"""
-
     STATUS_PENDING = "PENDING"
     STATUS_SUCCESS = "SUCCESS"
     STATUS_FAILED  = "FAILED"
 
     def __init__(self, transaction_id: str, amount: float, sender_id: str, receiver_id: str):
         if not transaction_id.startswith("TXN-"):
-            raise ValueError("transaction_id ต้องขึ้นต้นด้วย TXN-")
+            raise ValueError("transaction_id must start with TXN-")
         if amount <= 0:
-            raise ValueError("จำนวนเงินต้องมากกว่า 0")
+            raise ValueError("Amount must be greater than 0")
         self.__transaction_id = transaction_id
         self.__amount = amount
         self.__sender_id = sender_id
@@ -102,11 +94,11 @@ class Transaction:
 
     def mark_success(self):
         self.__status = self.STATUS_SUCCESS
-        print(f"[Transaction] {self.__transaction_id} สำเร็จ ({self.__amount:.2f} บาท)")
+        print(f"[Transaction] {self.__transaction_id} succeeded ({self.__amount:.2f} THB)")
 
     def mark_failed(self):
         self.__status = self.STATUS_FAILED
-        print(f"[Transaction] {self.__transaction_id} ล้มเหลว")
+        print(f"[Transaction] {self.__transaction_id} failed")
 
     def __repr__(self):
         return f"<Transaction id={self.__transaction_id} amount={self.__amount} status={self.__status}>"
@@ -123,23 +115,23 @@ class SoonSakBank:
 
     def deposit(self, amount: float, transaction: Transaction):
         if amount <= 0:
-            raise ValueError("จำนวนเงินต้องมากกว่า 0")
+            raise ValueError("Amount must be greater than 0")
         self.__balance += amount
         transaction.mark_success()
         self.__transaction_list.append(transaction)
-        print(f"[SoonSakBank] รับเงิน {amount:.2f} บาท | ยอดคงเหลือ: {self.__balance:.2f}")
+        print(f"[SoonSakBank] Received {amount:.2f} THB | Balance: {self.__balance:.2f}")
 
     def withdraw(self, amount: float, transaction: Transaction):
         if amount > self.__balance:
             transaction.mark_failed()
-            raise ValueError("ยอดเงินในบัญชีไม่พอ")
+            raise ValueError("Insufficient balance")
         self.__balance -= amount
         transaction.mark_success()
         self.__transaction_list.append(transaction)
-        print(f"[SoonSakBank] โอนเงิน {amount:.2f} บาท | ยอดคงเหลือ: {self.__balance:.2f}")
+        print(f"[SoonSakBank] Transferred {amount:.2f} THB | Balance: {self.__balance:.2f}")
 
     def check_balance(self) -> float:
-        print(f"[SoonSakBank] ยอดคงเหลือ: {self.__balance:.2f} บาท")
+        print(f"[SoonSakBank] Balance: {self.__balance:.2f} THB")
         return self.__balance
 
     def get_history(self) -> list:
@@ -160,17 +152,17 @@ class Payment:
 
     def set_payment_method(self, method: PaymentMethod):
         self.__payment_method = method
-        print(f"[Payment] เลือกวิธีชำระ: {method}")
+        print(f"[Payment] Selected payment method: {method}")
 
     def set_deposit_policy(self, policy: DepositPolicy):
         self.__deposit_policy = policy
 
     def validate(self) -> bool:
         if self.__payment_method is None:
-            raise ValueError("ยังไม่ได้เลือกวิธีชำระเงิน")
+            raise ValueError("Payment method not selected")
         if self.__order.calculate_total() <= 0:
-            raise ValueError("ยอดรวมต้องมากกว่า 0")
-        print(f"[Payment] ผ่านการตรวจสอบแล้ว")
+            raise ValueError("Total amount must be greater than 0")
+        print(f"[Payment] Validation passed")
         return True
 
     def pay_deposit(self, user_id: str, txn_counter: int) -> Transaction:
@@ -182,7 +174,7 @@ class Payment:
             deposit_amount = total * 0.3
         success = self.__payment_method.pay(deposit_amount)
         if not success:
-            raise Exception("การชำระเงินล้มเหลว")
+            raise Exception("Payment failed")
         txn = self.__create_transaction(
             txn_id=f"TXN-{txn_counter:03d}",
             amount=deposit_amount,
@@ -198,11 +190,11 @@ class Payment:
         total = self.__order.calculate_total()
         remaining = total - self.__order.deposit_amount
         if remaining <= 0:
-            print("[Payment] ชำระครบแล้ว ไม่ต้องชำระเพิ่ม")
+            print("[Payment] Already fully paid")
             return None
         success = self.__payment_method.pay(remaining)
         if not success:
-            raise Exception("การชำระเงินล้มเหลว")
+            raise Exception("Payment failed")
         txn = self.__create_transaction(
             txn_id=f"TXN-{txn_counter:03d}",
             amount=remaining,
@@ -222,10 +214,9 @@ class Payment:
             receiver_id=receiver_id
         )
         self.__transactions.append(txn)
-        print(f"[Payment] สร้าง Transaction {txn_id} สำเร็จ")
+        print(f"[Payment] Created Transaction {txn_id}")
         return txn
 
-    # expose สำหรับ backward compatibility กับ mcp_server ที่เรียก create_transaction
     def create_transaction(self, txn_id: str, amount: float,
                            sender_id: str, receiver_id: str) -> Transaction:
         return self.__create_transaction(txn_id, amount, sender_id, receiver_id)
