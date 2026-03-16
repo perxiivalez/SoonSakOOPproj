@@ -38,6 +38,7 @@ class SoonSak:
         self.__event_counter    = 0
         self.__request_counter  = 0
         self.__logged_in_users: list[str] = []
+        self.__appointment_counter = 0 
         print("=" * 50)
         print("  ระบบ SoonSak เริ่มต้นแล้ว")
         print("=" * 50)
@@ -60,6 +61,65 @@ class SoonSak:
 
     @property
     def _logged_in_users(self): return self.__logged_in_users
+
+
+    
+    def _new_appointment_id(self) -> str:  # 🔴 เพิ่ม
+        self.__appointment_counter += 1
+        return f"APT-{self.__appointment_counter:03d}"
+    
+    # ── Create Booking (แก้ไข: เพิ่ม description) ──
+        
+    # ── Add Appointment to Booking (🔴 เพิ่มใหม่) ──
+    
+    def add_appointment(
+        self,
+        user_id: str,
+        booking: Booking,
+        appointment_date: date,
+        start_time: str = "10:00",
+        end_time: str = "18:00"
+    ) -> Appointment:
+        """
+        เพิ่ม appointment เข้า booking
+        - ตรวจสอบว่า artist ว่างในวันนั้นหรือไม่
+        """
+        self.__require_login(user_id)
+        
+        artist = self.find_artist(booking.artist_id)
+        if not artist.is_available(appointment_date):
+            raise Exception(f"Artist {booking.artist_id} ไม่ว่างวันที่ {appointment_date}")
+        
+        # สร้าง appointment
+        session_number = booking.appointment_count + 1
+        appointment = Appointment(
+            appointment_id=self._new_appointment_id(),
+            booking_id=booking.booking_id,
+            session_number=session_number,
+            appointment_date=appointment_date,
+            start_time=start_time,
+            end_time=end_time
+        )
+        
+        # เพิ่มเข้า booking
+        booking.add_appointment(appointment)
+        
+        # เพิ่ม event เข้า artist calendar
+        event = Event(
+            event_id=f"EVT-{self.__event_counter+1:03d}",
+            event_name=f"Tattoo Session #{session_number} for {booking.user_id}",
+            event_date=appointment_date,
+            start_time=start_time,
+            end_time=end_time
+        )
+        self.__event_counter += 1
+        artist.manage_time(event)
+        
+        print(f"[SoonSak] เพิ่ม Appointment #{session_number} (วันที่ {appointment_date}) เข้า Booking {booking.booking_id}")
+        return appointment
+    
+    # ── Create Order (แก้ไข: 1 Order = 1 Booking) ──
+
 
     # ── ID Generators ──
 
@@ -166,10 +226,15 @@ class SoonSak:
         return admin
 
     # ── Booking Flow ──
+    
 
     def create_booking(self, user_id: str, artist_id: str,
-                       body_part: str, size: str, color_tone: str,
-                       base_price: float, reference_image: str = "") -> Booking:
+                   body_part: str, size: str, color_tone: str,
+                   base_price: float,
+                   description: str = "",
+                   reference_image: str = "") -> Booking:
+        """สร้าง Booking (ยังไม่มี appointment)"""
+        
         self.__require_login(user_id)
         user = self.find_user(user_id)
         if user is None:
@@ -181,19 +246,27 @@ class SoonSak:
             raise Exception(f"Artist {artist_id} ยังไม่ผ่านการยืนยันตัวตน")
 
         active = [b for b in user.view_history()
-                  if hasattr(b, 'status') and b.status in (Booking.STATUS_WAITING, Booking.STATUS_ACCEPTED)]
+                if hasattr(b, 'status') and b.status in (Booking.STATUS_WAITING, Booking.STATUS_ACCEPTED)]
         if len(active) >= user.max_bookings:
             raise Exception(f"จองพร้อมกันได้สูงสุด {user.max_bookings} รายการ")
 
         booking = Booking(
             booking_id=self._new_booking_id(),
-            user_id=user_id, artist_id=artist_id,
-            body_part=body_part, size=size, color_tone=color_tone,
-            reference_image=reference_image, base_price=base_price
+            user_id=user_id, 
+            artist_id=artist_id,
+            body_part=body_part, 
+            size=size, 
+            color_tone=color_tone,
+            base_price=base_price,
+            description=description,
+            reference_image=reference_image
         )
+
         user.add_history(booking)
         print(f"[SoonSak] สร้าง {booking} สำเร็จ")
         return booking
+
+     
 
     def cancel_booking(self, user_id: str, booking: Booking):
         self.__require_login(user_id)
@@ -205,8 +278,9 @@ class SoonSak:
     # ── Order & Payment Flow ──
 
     def create_order(self, booking: Booking,
-                     apply_vip_discount: bool = True,
-                     coupon_code: str = None) -> Order:
+                 apply_vip_discount: bool = True,
+                 coupon_code: str = None) -> Order:
+        """สร้าง Order จาก Booking"""
         user = self.find_user(booking.user_id)
         final_price = booking.base_price
 
@@ -223,11 +297,11 @@ class SoonSak:
                 print(f"[SoonSak] ⚠️ ใช้คูปองไม่ได้: {e}")
 
         booking.set_price(final_price)
-        order = Order(order_id=self._new_order_id())
-        order.add_booking(booking)
+        order = Order(order_id=self._new_order_id(), booking=booking)
         self.__order_list.append(order)
         print(f"[SoonSak] สร้าง {order} สำเร็จ")
         return order
+
 
     def process_payment(self, user_id: str, order: Order,
                         payment_method: PaymentMethod,
@@ -281,6 +355,8 @@ class SoonSak:
         artist = self.find_artist(artist_id)
         if artist is None:
             raise ValueError(f"ไม่พบ Artist {artist_id}")
+        
+        # ลบส่วนสร้าง Event ออก (จะสร้างตอน add_appointment แทน)
         artist.accept_job(booking)
 
     def artist_reject_job(self, artist_id: str, booking: Booking, reason: str = ""):

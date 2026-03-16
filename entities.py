@@ -89,42 +89,508 @@ class Rating:
 
 
 class TattooStyle:
+    """
+    คลาสสำหรับเก็บข้อมูลสไตล์รอยสัก
+    
+    Attributes:
+        style_id: รหัสเฉพาะของสไตล์
+        name: ชื่อสไตล์ (เช่น Traditional, Realism, Watercolor)
+        description: คำอธิบายสไตล์
+    """
+    
+    # Class variable: Popular tattoo styles
+    POPULAR_STYLES = [
+        "Traditional", "Realism", "Watercolor", "Japanese",
+        "Tribal", "Geometric", "Blackwork", "New School",
+        "Minimalist", "Neo-Traditional"
+    ]
+    
     def __init__(self, style_id: str, name: str, description: str = ""):
-        self.__style_id = style_id
-        self.__name = name
-        self.__description = description
-
+        """
+        สร้าง TattooStyle object
+        
+        Args:
+            style_id: รหัสสไตล์ (ต้องไม่ว่าง)
+            name: ชื่อสไตล์ (ต้องไม่ว่าง)
+            description: คำอธิบายสไตล์ (optional)
+            
+        Raises:
+            ValueError: ถ้า style_id หรือ name ว่าง
+        """
+        if not style_id or not style_id.strip():
+            raise ValueError("style_id ต้องไม่ว่าง")
+        if not name or not name.strip():
+            raise ValueError("name ต้องไม่ว่าง")
+            
+        self.__style_id = style_id.strip()
+        self.__name = name.strip()
+        self.__description = description.strip()
+        self.__created_at = datetime.now()
+    
+    # ── Properties (Read-only) ──
+    
     @property
-    def name(self): return self.__name
-
-    def __repr__(self):
-        return f"<TattooStyle {self.__name}>"
+    def style_id(self) -> str:
+        """รหัสสไตล์ (read-only)"""
+        return self.__style_id
+    
+    @property
+    def name(self) -> str:
+        """ชื่อสไตล์"""
+        return self.__name
+    
+    @property
+    def description(self) -> str:
+        """คำอธิบายสไตล์"""
+        return self.__description
+    
+    @property
+    def created_at(self) -> datetime:
+        """วันที่สร้าง (read-only)"""
+        return self.__created_at
+    
+    # ── Setters (เฉพาะ description สามารถแก้ไขได้) ──
+    
+    @description.setter
+    def description(self, value: str):
+        """อัปเดตคำอธิบายสไตล์"""
+        self.__description = value.strip() if value else ""
+    
+    # ── Methods ──
+    
+    def update_description(self, new_description: str) -> None:
+        """
+        อัปเดตคำอธิบายสไตล์
+        
+        Args:
+            new_description: คำอธิบายใหม่
+        """
+        self.description = new_description
+        print(f"[TattooStyle] อัปเดตคำอธิบาย '{self.__name}' แล้ว")
+    
+    def is_popular(self) -> bool:
+        """ตรวจสอบว่าเป็นสไตล์ยอดนิยมหรือไม่"""
+        return self.__name in self.POPULAR_STYLES
+    
+    def get_summary(self) -> str:
+        """สรุปข้อมูลสไตล์แบบย่อ"""
+        popular = "⭐ " if self.is_popular() else ""
+        return f"{popular}{self.__name} ({self.__style_id})"
+    
+    # ── Magic Methods ──
+    
+    def __repr__(self) -> str:
+        return f"<TattooStyle id={self.__style_id} name={self.__name}>"
+    
+    def __str__(self) -> str:
+        return self.__name
+    
+    def __eq__(self, other) -> bool:
+        """เปรียบเทียบสไตล์ตาม style_id"""
+        if not isinstance(other, TattooStyle):
+            return False
+        return self.__style_id == other.style_id
+    
+    def __hash__(self) -> int:
+        """ทำให้ TattooStyle ใช้ใน set/dict ได้"""
+        return hash(self.__style_id)
 
 
 class Portfolio:
-    def __init__(self, portfolio_id: str):
-        self.__portfolio_id = portfolio_id
+    """
+    คลาสสำหรับเก็บ Portfolio ผลงานรอยสัก
+    
+    Attributes:
+        portfolio_id: รหัสเฉพาะของ portfolio
+        owner_id: รหัสเจ้าของ (artist_id)
+        style: สไตล์หลักของ portfolio (optional)
+        images: รายการรูปภาพ (paths/URLs)
+        description: คำอธิบาย portfolio
+    """
+    
+    # Class variable: รูปแบบไฟล์ที่รองรับ
+    SUPPORTED_FORMATS = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+    MAX_IMAGES = 50  # จำนวนรูปสูงสุด
+    
+    def __init__(self, portfolio_id: str, owner_id: str = "", 
+                 style: Optional['TattooStyle'] = None, description: str = ""):
+        """
+        สร้าง Portfolio object
+        
+        Args:
+            portfolio_id: รหัส portfolio (ต้องไม่ว่าง)
+            owner_id: รหัสเจ้าของ (optional สำหรับ backward compatibility)
+            style: สไตล์หลัก (TattooStyle object, optional)
+            description: คำอธิบาย portfolio
+            
+        Raises:
+            ValueError: ถ้า portfolio_id ว่าง
+        """
+        if not portfolio_id or not portfolio_id.strip():
+            raise ValueError("portfolio_id ต้องไม่ว่าง")
+            
+        self.__portfolio_id = portfolio_id.strip()
+        self.__owner_id = owner_id.strip() if owner_id else ""
+        self.__style = style
         self.__images: list = []
-        self.__styles: list = []
-
-    def add_image(self, image_url: str):
-        if not image_url:
-            raise ValueError("image_url ต้องไม่ว่าง")
-        self.__images.append(image_url)
-
-    def remove_image(self, image_url: str):
-        if image_url not in self.__images:
-            raise ValueError("ไม่พบรูปภาพนี้ใน portfolio")
-        self.__images.remove(image_url)
-
-    def add_style(self, style: TattooStyle):
-        self.__styles.append(style)
-
+        self.__styles: list = []  # รักษาไว้สำหรับ backward compatibility
+        self.__description = description.strip()
+        self.__created_at = datetime.now()
+        self.__updated_at = datetime.now()
+        self.__is_public = True
+        self.__view_count = 0
+    
+    # ── Properties ──
+    
     @property
-    def images(self): return list(self.__images)
-
+    def portfolio_id(self) -> str:
+        """รหัส portfolio (read-only)"""
+        return self.__portfolio_id
+    
     @property
-    def styles(self): return list(self.__styles)
+    def owner_id(self) -> str:
+        """รหัสเจ้าของ (read-only)"""
+        return self.__owner_id
+    
+    @property
+    def style(self) -> Optional['TattooStyle']:
+        """สไตล์หลัก"""
+        return self.__style
+    
+    @property
+    def description(self) -> str:
+        """คำอธิบาย portfolio"""
+        return self.__description
+    
+    @property
+    def images(self) -> list:
+        """รายการรูปภาพ (copy เพื่อป้องกันการแก้ไขโดยตรง)"""
+        return list(self.__images)
+    
+    @property
+    def styles(self) -> list:
+        """รายการสไตล์ทั้งหมด (backward compatibility)"""
+        result = list(self.__styles)
+        if self.__style and self.__style not in result:
+            result.append(self.__style)
+        return result
+    
+    @property
+    def image_count(self) -> int:
+        """จำนวนรูปภาพ"""
+        return len(self.__images)
+    
+    @property
+    def is_public(self) -> bool:
+        """สถานะการเผยแพร่"""
+        return self.__is_public
+    
+    @property
+    def view_count(self) -> int:
+        """จำนวนครั้งที่ถูกดู"""
+        return self.__view_count
+    
+    @property
+    def created_at(self) -> datetime:
+        """วันที่สร้าง (read-only)"""
+        return self.__created_at
+    
+    @property
+    def updated_at(self) -> datetime:
+        """วันที่อัปเดตล่าสุด (read-only)"""
+        return self.__updated_at
+    
+    # ── Setters ──
+    
+    @style.setter
+    def style(self, new_style: Optional['TattooStyle']):
+        """เปลี่ยนสไตล์หลัก"""
+        if new_style is not None and not isinstance(new_style, TattooStyle):
+            raise TypeError("style ต้องเป็น TattooStyle object หรือ None")
+        self.__style = new_style
+        self.__touch()
+    
+    @description.setter
+    def description(self, value: str):
+        """อัปเดตคำอธิบาย"""
+        self.__description = value.strip() if value else ""
+        self.__touch()
+    
+    # ── Image Management Methods ──
+    
+    def add_image(self, image: str) -> bool:
+        """
+        เพิ่มรูปภาพเข้า portfolio
+        
+        Args:
+            image: path หรือ URL ของรูปภาพ
+            
+        Returns:
+            True ถ้าเพิ่มสำเร็จ
+            
+        Raises:
+            ValueError: ถ้ารูปภาพว่าง, ซ้ำ, หรือเกินจำนวนสูงสุด
+        """
+        if not image or not image.strip():
+            raise ValueError("image path/URL ต้องไม่ว่าง")
+        
+        image = image.strip()
+        
+        # เช็คว่าซ้ำหรือไม่
+        if image in self.__images:
+            raise ValueError(f"รูปภาพ '{image}' มีอยู่ใน portfolio แล้ว")
+        
+        # เช็คจำนวนสูงสุด
+        if len(self.__images) >= self.MAX_IMAGES:
+            raise ValueError(f"Portfolio เต็มแล้ว (สูงสุด {self.MAX_IMAGES} รูป)")
+        
+        # เช็ครูปแบบไฟล์ (สำหรับ file path)
+        if not image.startswith(('http://', 'https://')):
+            if not any(image.lower().endswith(fmt) for fmt in self.SUPPORTED_FORMATS):
+                print(f"⚠️ Warning: '{image}' อาจไม่ใช่ไฟล์รูปภาพที่รองรับ")
+        
+        self.__images.append(image)
+        self.__touch()
+        print(f"[Portfolio] เพิ่มรูปภาพ '{image}' สำเร็จ ({self.image_count}/{self.MAX_IMAGES})")
+        return True
+    
+    def remove_image(self, image: str) -> bool:
+        """
+        ลบรูปภาพออกจาก portfolio
+        
+        Args:
+            image: path หรือ URL ของรูปภาพที่ต้องการลบ
+            
+        Returns:
+            True ถ้าลบสำเร็จ
+            
+        Raises:
+            ValueError: ถ้าไม่พบรูปภาพ
+        """
+        if image not in self.__images:
+            raise ValueError(f"ไม่พบรูปภาพ '{image}' ใน portfolio")
+        
+        self.__images.remove(image)
+        self.__touch()
+        print(f"[Portfolio] ลบรูปภาพ '{image}' สำเร็จ ({self.image_count}/{self.MAX_IMAGES})")
+        return True
+    
+    def remove_image_by_index(self, index: int) -> str:
+        """
+        ลบรูปภาพตำแหน่งที่ระบุ
+        
+        Args:
+            index: ตำแหน่งของรูปภาพ (0-based)
+            
+        Returns:
+            path/URL ของรูปภาพที่ถูกลบ
+            
+        Raises:
+            IndexError: ถ้า index ไม่ถูกต้อง
+        """
+        if not 0 <= index < len(self.__images):
+            raise IndexError(f"index {index} ไม่ถูกต้อง (มีรูปทั้งหมด {len(self.__images)} รูป)")
+        
+        removed = self.__images.pop(index)
+        self.__touch()
+        print(f"[Portfolio] ลบรูปภาพตำแหน่ง {index} สำเร็จ: '{removed}'")
+        return removed
+    
+    def clear_images(self) -> int:
+        """
+        ลบรูปภาพทั้งหมด
+        
+        Returns:
+            จำนวนรูปที่ถูกลบ
+        """
+        count = len(self.__images)
+        self.__images.clear()
+        self.__touch()
+        print(f"[Portfolio] ลบรูปภาพทั้งหมด {count} รูป")
+        return count
+    
+    def get_images(self) -> list:
+        """
+        รับรายการรูปภาพทั้งหมด
+        
+        Returns:
+            List ของ image paths/URLs (copy)
+        """
+        return list(self.__images)
+    
+    def get_image_at(self, index: int) -> str:
+        """
+        รับรูปภาพตำแหน่งที่ระบุ
+        
+        Args:
+            index: ตำแหน่งของรูปภาพ
+            
+        Returns:
+            path/URL ของรูปภาพ
+            
+        Raises:
+            IndexError: ถ้า index ไม่ถูกต้อง
+        """
+        if not 0 <= index < len(self.__images):
+            raise IndexError(f"index {index} ไม่ถูกต้อง")
+        return self.__images[index]
+    
+    def has_image(self, image: str) -> bool:
+        """ตรวจสอบว่ามีรูปภาพนี้หรือไม่"""
+        return image in self.__images
+    
+    # ── Style Management Methods ──
+    
+    def add_style(self, style: TattooStyle) -> None:
+        """
+        เพิ่มสไตล์เข้า portfolio (backward compatibility)
+        
+        Args:
+            style: TattooStyle object
+        """
+        if not isinstance(style, TattooStyle):
+            raise TypeError("style ต้องเป็น TattooStyle object")
+        if style not in self.__styles:
+            self.__styles.append(style)
+            self.__touch()
+    
+    def remove_style(self, style: TattooStyle) -> None:
+        """ลบสไตล์ออกจาก portfolio"""
+        if style in self.__styles:
+            self.__styles.remove(style)
+            self.__touch()
+    
+    # ── Description Methods ──
+    
+    def update_description(self, description: str) -> None:
+        """
+        อัปเดตคำอธิบาย portfolio
+        
+        Args:
+            description: คำอธิบายใหม่
+        """
+        self.description = description
+        print(f"[Portfolio] อัปเดตคำอธิบายแล้ว")
+    
+    def append_description(self, additional_text: str) -> None:
+        """เพิ่มข้อความต่อท้ายคำอธิบาย"""
+        self.__description = f"{self.__description}\n{additional_text}".strip()
+        self.__touch()
+    
+    # ── Style Methods ──
+    
+    def change_style(self, new_style: TattooStyle) -> None:
+        """
+        เปลี่ยนสไตล์หลัก
+        
+        Args:
+            new_style: สไตล์ใหม่
+        """
+        old_style = self.__style
+        self.style = new_style
+        old_name = old_style.name if old_style else "None"
+        new_name = new_style.name if new_style else "None"
+        print(f"[Portfolio] เปลี่ยนสไตล์: {old_name} → {new_name}")
+    
+    # ── Visibility Methods ──
+    
+    def publish(self) -> None:
+        """เผยแพร่ portfolio ให้ทุกคนเห็น"""
+        if self.__is_public:
+            print("[Portfolio] portfolio เผยแพร่อยู่แล้ว")
+            return
+        self.__is_public = True
+        self.__touch()
+        print("[Portfolio] เผยแพร่ portfolio สำเร็จ")
+    
+    def unpublish(self) -> None:
+        """ซ่อน portfolio (ตั้งเป็น private)"""
+        if not self.__is_public:
+            print("[Portfolio] portfolio ถูกซ่อนอยู่แล้ว")
+            return
+        self.__is_public = False
+        self.__touch()
+        print("[Portfolio] ซ่อน portfolio แล้ว")
+    
+    def increment_view(self) -> int:
+        """เพิ่มจำนวนการดู (เมื่อมีคนเปิดดู portfolio)"""
+        self.__view_count += 1
+        return self.__view_count
+    
+    # ── Validation Methods ──
+    
+    def is_empty(self) -> bool:
+        """ตรวจสอบว่า portfolio ว่างเปล่าหรือไม่"""
+        return len(self.__images) == 0
+    
+    def is_full(self) -> bool:
+        """ตรวจสอบว่า portfolio เต็มหรือไม่"""
+        return len(self.__images) >= self.MAX_IMAGES
+    
+    def can_add_images(self, count: int = 1) -> bool:
+        """ตรวจสอบว่าสามารถเพิ่มรูปได้อีกหรือไม่"""
+        return len(self.__images) + count <= self.MAX_IMAGES
+    
+    # ── Display Methods ──
+    
+    def get_summary(self) -> str:
+        """สรุปข้อมูล portfolio"""
+        visibility = "🌐 Public" if self.__is_public else "🔒 Private"
+        style_name = self.__style.name if self.__style else "No style"
+        owner = f"Owner: {self.__owner_id}" if self.__owner_id else "No owner"
+        return (
+            f"Portfolio: {self.__portfolio_id}\n"
+            f"  {owner}\n"
+            f"  Style      : {style_name}\n"
+            f"  Images     : {self.image_count}/{self.MAX_IMAGES}\n"
+            f"  Visibility : {visibility}\n"
+            f"  Views      : {self.__view_count}\n"
+            f"  Updated    : {self.__updated_at.strftime('%Y-%m-%d %H:%M')}"
+        )
+    
+    def list_images(self) -> str:
+        """แสดงรายการรูปภาพทั้งหมดพร้อม index"""
+        if self.is_empty():
+            return "📷 ไม่มีรูปภาพใน portfolio"
+        
+        lines = [f"📷 รูปภาพใน Portfolio ({self.image_count} รูป):"]
+        for i, img in enumerate(self.__images):
+            lines.append(f"  [{i}] {img}")
+        return "\n".join(lines)
+    
+    # ── Helper Methods ──
+    
+    def __touch(self) -> None:
+        """อัปเดตเวลาที่แก้ไขล่าสุด (private method)"""
+        self.__updated_at = datetime.now()
+    
+    # ── Magic Methods ──
+    
+    def __repr__(self) -> str:
+        style_name = self.__style.name if self.__style else "None"
+        return (f"<Portfolio id={self.__portfolio_id} "
+                f"style={style_name} images={self.image_count}>")
+    
+    def __str__(self) -> str:
+        style_name = self.__style.name if self.__style else "No style"
+        return f"{self.__portfolio_id} ({style_name} - {self.image_count} images)"
+    
+    def __len__(self) -> int:
+        """ใช้ len(portfolio) เพื่อดูจำนวนรูป"""
+        return len(self.__images)
+    
+    def __contains__(self, image: str) -> bool:
+        """ใช้ 'image' in portfolio เพื่อเช็ครูปภาพ"""
+        return image in self.__images
+    
+    def __iter__(self):
+        """ทำให้ portfolio วนลูปได้"""
+        return iter(self.__images)
+    
+    def __getitem__(self, index: int) -> str:
+        """ใช้ portfolio[index] เพื่อเข้าถึงรูปภาพ"""
+        return self.__images[index]
+
 
 
 class Event:
@@ -434,14 +900,14 @@ class User:
 
 class VIPMember(User):
     """Inheritance: User → VIPMember"""
-
     RANK_SILVER   = "SILVER"
     RANK_GOLD     = "GOLD"
     RANK_PLATINUM = "PLATINUM"
 
-    THRESHOLD_SILVER   =  5_000
-    THRESHOLD_GOLD     = 15_000
-    THRESHOLD_PLATINUM = 30_000
+    # 🔴 แก้เกณฑ์ใหม่ตามที่กำหนด
+    THRESHOLD_SILVER   = 15_000  # เดิม 5,000
+    THRESHOLD_GOLD     = 25_000  # เดิม 15,000
+    THRESHOLD_PLATINUM = 40_000  # เดิม 30,000
 
     DISCOUNT_SILVER   =  5
     DISCOUNT_GOLD     = 10
@@ -453,6 +919,7 @@ class VIPMember(User):
         self.__rank = rank
         self._max_bookings = 6
         self._max_calendar = 120
+
 
     @property
     def rank(self): return self.__rank
@@ -568,17 +1035,41 @@ class Artist(Staff):
     def __init__(self, staff_id: str, name: str, email: str, password: str, experience: int = 0):
         super().__init__(staff_id, name, email, password)
         self.__experience = experience
-        self.__deposit_policy = None
-        self.__portfolio: Optional[Portfolio] = None
-        self.__available_day_list: list = []
-        self.__request_list: list = []
+        self.__calendar = Calendar(staff_id)
         self.__booking_list: list = []
-        self.__appointment_list: list = []
-        self.__submitting: bool = False
-        self.__status = self.STATUS_PENDING
-        self.__calendar: Optional[Calendar] = None
         self.__ratings: list = []
+        self.__request_list: list = []
+        self.__available_days: list[date] = []
+        self.__status = "pending"
+        self.__deposit_policy = None  # 🔴 เพิ่มบรรทัดนี้
 
+ 
+    def set_available_days(self, days: list):
+        """Artist ตั้งวันว่าง"""
+        self.__available_days = days
+        print(f"[Artist] {self._name} ตั้งวันว่าง {len(days)} วัน")
+
+    def add_available_day(self, day):
+        """เพิ่มวันว่าง"""
+        if day not in self.__available_days:
+            self.__available_days.append(day)
+
+    def get_available_days(self):
+        """คืนรายการวันว่าง"""
+        return list(self.__available_days)
+
+    def is_available(self, target_date):
+        """เช็คว่าวันนี้ว่างไหม"""
+        if target_date not in self.__available_days:
+            return False
+
+        busy = self.__calendar.get_busy_dates()
+        return target_date not in busy
+
+    def view_available_days(self):
+        """ดูวันว่างที่ยังไม่ถูกจอง"""
+        busy = self.__calendar.get_busy_dates()
+        return [d for d in self.__available_days if d not in busy]
     @property
     def staff_id(self): return self._user_id
 
