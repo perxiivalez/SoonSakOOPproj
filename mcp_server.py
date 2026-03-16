@@ -18,7 +18,7 @@ from payment import (
     FixedDepositPolicy, PercentDepositPolicy,
     DepositPolicy
 )
-from controller import SoonSak
+from project import SoonSak
 
 from fastmcp import FastMCP
 
