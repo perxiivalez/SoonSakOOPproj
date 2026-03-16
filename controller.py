@@ -244,7 +244,8 @@ class SoonSak:
             self.__txn_counter += 1
             user = self.find_user(user_id)
             if user is not None:
-                user.add_spent(order.calculate_total())
+                remaining = order.calculate_total() - order.deposit_amount
+                user.add_spent(remaining if remaining > 0 else order.calculate_total())
                 self.__check_vip_upgrade(user)
         else:
             payment.pay_deposit(user_id, self.__txn_counter + 1)

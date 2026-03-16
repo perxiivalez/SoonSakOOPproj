@@ -109,16 +109,17 @@ def register_user(
     name: str,
     email: str,
     phone: str,
+    password: str = "1234",
     is_vip: bool = False,
     vip_rank: str = "SILVER"
 ) -> str:
     """
     ลงทะเบียน User ใหม่เข้าระบบ
     - user_id: รหัส เช่น USR-001
+    - password: รหัสผ่าน (default: 1234)
     - is_vip: True = สร้างเป็น VIPMember
     - vip_rank: SILVER / GOLD / PLATINUM (ใช้เมื่อ is_vip=True)
     """
-    password = "1234"
     if is_vip:
         buf = io.StringIO()
         try:
@@ -210,16 +211,32 @@ def register_artist(
     staff_id: str,
     name: str,
     email: str,
+    password: str = "1234",
     experience: int = 0
 ) -> str:
     """
     ลงทะเบียน Artist ใหม่ (สถานะ PENDING รอ Admin อนุมัติ)
     - staff_id: รหัส เช่น ART-001
+    - password: รหัสผ่าน (default: 1234)
     - experience: ประสบการณ์เป็นปี
     """
-    password = "1234"
     return _capture(_system.register_artist, staff_id, name, email, password, experience)
 
+@mcp.tool()
+def register_admin(
+    admin_id: str,
+    name: str,
+    email: str,
+    password: str
+) -> str:
+    """
+    ลงทะเบียน Admin ใหม่เข้าระบบ
+    - admin_id: รหัส เช่น AD001
+    - name: ชื่อ Admin
+    - email: อีเมล
+    - password: รหัสผ่าน
+    """
+    return _capture(_system.register_admin, admin_id, name, email, password)
 
 @mcp.tool()
 def approve_artist(admin_id: str, artist_id: str) -> str:
@@ -417,24 +434,36 @@ def pay_deposit(
     user_id: str,
     order_id: str,
     promptpay_number: str,
-    policy_type: str = "percent",
-    policy_value: float = 30.0
+    policy_type: str = "",
+    policy_value: float = 0.0
 ) -> str:
     """
     ชำระมัดจำผ่าน PromptPay
-    - policy_type: "percent" หรือ "fixed"
-    - policy_value: % หรือจำนวนบาท
+    - policy_type: "percent" หรือ "fixed" (ถ้าว่างจะใช้ policy ของ Artist อัตโนมัติ)
+    - policy_value: % หรือจำนวนบาท (ใช้เมื่อระบุ policy_type)
     """
     order = _get_order(order_id)
     if isinstance(order, str):
         return order
+    if order.status != Order.STATUS_PENDING_PAYMENT:
+        return f"❌ Order {order_id} สถานะ {order.status} — ไม่สามารถชำระมัดจำได้"
     buf = io.StringIO()
     try:
         with redirect_stdout(buf):
             method = Promptpay(phone_or_id=promptpay_number)
-            policy = (PercentDepositPolicy(policy_value)
-                      if policy_type == "percent"
-                      else FixedDepositPolicy(policy_value))
+            # หา deposit policy: ใช้ที่ระบุมา หรือ fallback ไปใช้ของ artist
+            policy = None
+            if policy_type.lower() == "percent" and policy_value > 0:
+                policy = PercentDepositPolicy(policy_value)
+            elif policy_type.lower() == "fixed" and policy_value > 0:
+                policy = FixedDepositPolicy(policy_value)
+            else:
+                # หา artist จาก booking แรกใน order
+                for booking in order.bookings:
+                    artist = _system.find_artist(booking.artist_id)
+                    if artist and artist.deposit_policy:
+                        policy = artist.deposit_policy
+                        break
             _system.process_payment(user_id, order, method, policy, pay_full=False)
         return buf.getvalue() or "✅ ชำระมัดจำสำเร็จ"
     except Exception as e:
@@ -447,6 +476,10 @@ def pay_full(user_id: str, order_id: str, promptpay_number: str) -> str:
     order = _get_order(order_id)
     if isinstance(order, str):
         return order
+    if order.status == Order.STATUS_FULLY_PAID:
+        return f"❌ Order {order_id} ชำระครบแล้ว ไม่ต้องชำระเพิ่ม"
+    if order.status not in (Order.STATUS_PENDING_PAYMENT, Order.STATUS_DEPOSIT_PAID):
+        return f"❌ Order {order_id} สถานะ {order.status} — ไม่สามารถชำระได้"
     buf = io.StringIO()
     try:
         with redirect_stdout(buf):
@@ -455,6 +488,50 @@ def pay_full(user_id: str, order_id: str, promptpay_number: str) -> str:
         return buf.getvalue() or "✅ ชำระเต็มจำนวนสำเร็จ"
     except Exception as e:
         return f"❌ Error: {e}"
+
+
+@mcp.tool()
+def calculate_deposit(order_id: str, user_type: str = "normal") -> str:
+    """
+    คำนวณยอดมัดจำของ Order
+    - user_type: "normal" หรือ "vip"
+    - ใช้ deposit_policy ของ artist อัตโนมัติ (ถ้าตั้งไว้)
+    """
+    order = _get_order(order_id)
+    if isinstance(order, str):
+        return order
+    lines = [f"🧮 Calculate Deposit: {order_id}"]
+    total = order.calculate_total()
+    lines.append(f"  ราคารวม: {total:.2f} บาท")
+    for booking in order.bookings:
+        artist = _system.find_artist(booking.artist_id)
+        policy = artist.deposit_policy if artist else None
+        if policy:
+            deposit = policy.calculate_deposit(total)
+            lines.append(f"  deposit_policy: {policy}")
+        else:
+            deposit = total * 0.3
+            lines.append(f"  deposit_policy: default 30%")
+        lines.append(f"  ยอดมัดจำ ({user_type}): {deposit:.2f} บาท")
+        lines.append(f"  ยอดที่เหลือ: {total - deposit:.2f} บาท")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def view_schedule(artist_id: str) -> str:
+    """
+    ดูตารางนัดหมายของ Artist ในเดือนปัจจุบัน
+    """
+    artist = _system.find_artist(artist_id)
+    if artist is None:
+        return f"❌ ไม่พบ Artist {artist_id}"
+    events = artist.view_schedule()
+    if not events:
+        return f"📅 Artist {artist_id} ไม่มีนัดหมายในเดือนนี้"
+    lines = [f"📅 ตาราง Artist {artist_id} เดือนนี้ ({len(events)} รายการ):"]
+    for e in events:
+        lines.append(f"  {e.date} — {e.event_name}")
+    return "\n".join(lines)
 
 
 @mcp.tool()
@@ -539,6 +616,83 @@ def list_all_artists() -> str:
         avg = a.average_rating()
         lines.append(f"  [{a.staff_id}] {a.name} | status={a.status} | rating={avg:.1f}/5")
     return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════
+# 💬 MESSAGING TOOLS
+# ═══════════════════════════════════════════════
+
+# registry เก็บ mailbox แยกต่างหาก (ใช้ entities.Mailbox)
+_mailbox_registry: list = []  # [(user_id, Mailbox), ...]
+
+
+def _get_or_create_mailbox(user_id: str):
+    """หรือสร้าง Mailbox ให้ user_id นั้น"""
+    from entities import Mailbox
+    for uid, mb in _mailbox_registry:
+        if uid == user_id:
+            return mb
+    mb = Mailbox(user_id)
+    _mailbox_registry.append((user_id, mb))
+    return mb
+
+
+@mcp.tool()
+def send_message(sender_id: str, receiver_id: str, message: str) -> str:
+    """
+    ส่งข้อความระหว่าง User / Artist / System
+    - sender_id: ID ผู้ส่ง (หรือ SYSTEM)
+    - receiver_id: ID ผู้รับ
+    - message: ข้อความ
+    """
+    from entities import Mail
+    try:
+        sender_mb = _get_or_create_mailbox(sender_id)
+        receiver_mb = _get_or_create_mailbox(receiver_id)
+        sender_mb.send_message(receiver_mb, message)
+        return f"✅ ส่งข้อความจาก {sender_id} → {receiver_id} สำเร็จ\n   💬 \"{message}\""
+    except Exception as e:
+        return f"❌ Error: {e}"
+
+
+@mcp.tool()
+def view_message(user_id: str) -> str:
+    """
+    ดูกล่องข้อความของ user_id
+    - แสดงข้อความทั้งหมดที่ได้รับ
+    """
+    mb = _get_or_create_mailbox(user_id)
+    messages = mb.get_messages()
+    if not messages:
+        return f"📭 {user_id} ไม่มีข้อความ"
+    lines = [f"📬 กล่องข้อความของ {user_id} ({len(messages)} ข้อความ):"]
+    for i, mail in enumerate(messages, 1):
+        lines.append(f"  [{i}] จาก {mail.sender_id}: {mail.message}")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def system_send_message(receiver_id: str, message: str) -> str:
+    """
+    ระบบส่งข้อความอัตโนมัติให้ผู้ใช้
+    - receiver_id: ID ผู้รับ
+    - message: ข้อความแจ้งเตือน
+    """
+    return send_message("SYSTEM", receiver_id, message)
+
+@mcp.tool()
+def reset_system() -> str:
+    """รีเซ็ตระบบทั้งหมด — ใช้สำหรับ testing เท่านั้น"""
+    global _system, _booking_list, _order_list, _request_list, _mailbox_registry
+    _system       = SoonSak()
+    _booking_list = []
+    _order_list   = []
+    _request_list = []
+    _mailbox_registry = []
+    # Seed Admin ใหม่
+    _system.register_admin("AD001", "Super Admin", "admin@soonsak.com", "admin123")
+    _system._logged_in_users.append("AD001")
+    return "✅ ระบบถูกรีเซ็ตแล้ว — พร้อมเทสใหม่"
 
 
 if __name__ == "__main__":

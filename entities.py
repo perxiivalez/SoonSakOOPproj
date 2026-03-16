@@ -671,7 +671,10 @@ class Admin(Staff):
     @property
     def staff_id(self): return self._user_id
 
+    
+        
     def approve_artist(self, artist: Artist):
+
         artist.verify_identity()
         print(f"[Admin] อนุมัติ Artist {artist.name} แล้ว")
 
